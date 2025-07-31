@@ -1,4 +1,4 @@
-# MicroView: NSDI'26 Artifact Evaluation 🚀
+# MicroView: NSDI'26 Artifact Evaluation
 
 ## Overview
 
