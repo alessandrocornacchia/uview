@@ -4,13 +4,31 @@
 
 MicroView is a cloud-native observability system that uses SmartNIC-to-host communication via RDMA for microservices metrics collection. 
 
-This repository contains the artifacts to reproduce the experimental results from our NSDI paper **Sketching a Solution to Observability Bloat: In-Situ Metrics  Analytics on IPUs**, Alessandro Cornacchia, Theophilus A. Benson, Muhammad Bilal, Marco Canini
+This repository contains instructions to access our artifats and reproduce the experimental results of the NSDI paper **Sketching a Solution to Observability Bloat: In-Situ Metrics  Analytics on IPUs**, Alessandro Cornacchia, Theophilus A. Benson, Muhammad Bilal, Marco Canini
 
-## 🔧 Access to Hardware
+### Contents
 
-**Required Hardware**: Nvidia BlueField2 IPU (or SmartNIC) with RDMA capabilities
+- [Getting Started](#getting-started) kick the tires instructions to verify the setup is working correctly and basic functionalities of MicroView
+- [Detailed Instructions](#detailed-instructions) in-depth step-by-step instruction to reproduce paper's claims
 
-**Access**: Reviewers will be provided VPN access to our testbed infrastructure. Please contact the authors via HotCRP to request access credentials. We will ensure reviewer anonymity is preserved throughout the evaluation process.
+
+## 🔧 Access
+
+**Required Hardware**: Nvidia BlueField2 IPU.
+
+> [!IMPORTANT]
+> **Access**: Reviewers will be provided VPN access to our testbed infrastructure. Please reach out the  [authors](#support) to request access. We will ensure reviewer anonymity is preserved throughout this process.
+
+## ⚙️ Environment Setup
+
+Make sure to [obtain access](#access) before proceeding with below. 
+
+**Default Setup**: Reviewers will be provided with a local username on both host and SmartNIC machines. The environment includes:
+- NVIDIA BLueField2 IPU with RDMA tools and drivers configured
+- Network connectivity pre-configured as shown in architecture diagram below
+- Pre-installed Python environment with conda and dependencies from `requirements.txt` installed
+- Kubernetes cluster with microservices applications and Blueprint compiler
+
 
 ### System architecture
 
@@ -18,7 +36,7 @@ The testbed consists of a host machine connected to a BlueField2 SmartNIC via RD
 
 ```
 ┌─────────────────┐    RDMA     ┌─────────────────┐
-│   Host Machine  │◄──────────► │ BlueField2 NIC  │
+│   Host Machine  │◄──────────► │ BlueField2 IPU  │
 │  192.168.100.1  │             │ 192.168.100.2   │
 │                 │             │ 10.200.0.52     │
 │ microview-host  │             │ microview-nic   │
@@ -39,15 +57,6 @@ The testbed consists of a host machine connected to a BlueField2 SmartNIC via RD
 Please verify connectivity with: `ping 192.168.100.2` (from host) and `ping 192.168.100.1` (from SmartNIC).
 
 **RDMA**. Verify via `ib` utilities. For example: start RDMA server on IPU with `ib_write_bw -d mlx5_3 -i 1` and try to connect from host-side with `ib_write_bw -d mlx5_1 -i 1 10.200.0.52`
-
-
-## ⚙️ Environment Setup
-
-**Default Setup**: Reviewers will be provided with a local username on both host and SmartNIC machines. The environment includes:
-- Pre-installed Python 3.11 with conda
-- All dependencies from `requirements.txt` installed
-- RDMA tools and drivers configured
-- Network interfaces pre-configured as shown in architecture diagram
 
 Simply activate the environment:
 ```bash
@@ -198,11 +207,6 @@ python microview-host.py --debug
 python microview-nic.py --debug  
 python libmicroview.py --debug
 ```
-
-### 🔍 Environment Issues
-- Verify conda environment: `conda info --envs`
-- Check dependencies: `pip list | grep -E "(numpy|pandas|matplotlib)"`
-- Test RDMA: `ibstat` should show active devices
 
 ## 💬 Support
 
