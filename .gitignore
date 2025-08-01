@@ -1,0 +1,22 @@
+*.txt
+.port
+obj/**
+bin/**
+.conda**
+*.pickle
+*.json
+__pycache__/**
+*.pyc
+*.log
+**.csv
+results**
+
+plot/**pdf
+plot/**png
+
+logs/**
+results/**
+
+# ignore here as they are linux links
+**/docker/utils.py
+**/docker/libmicroview.py
