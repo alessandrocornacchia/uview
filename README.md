@@ -8,8 +8,8 @@ This repository contains instructions to access our artifats and reproduce the e
 
 ### Contents
 
-- [Getting Started](#getting-started) kick the tires instructions to verify the setup is working correctly and basic functionalities of MicroView
-- [Detailed Instructions](#detailed-instructions) in-depth step-by-step instruction to reproduce paper's claims
+- [Getting Started](#-getting-started) kick the tires instructions to verify the setup is working correctly and basic functionalities of MicroView
+- [Detailed Instructions](#-detailed-instructions) in-depth step-by-step instruction to reproduce paper's claims
 
 
 ## 🔧 Access
@@ -17,11 +17,11 @@ This repository contains instructions to access our artifats and reproduce the e
 **Required Hardware**: Nvidia BlueField2 IPU.
 
 > [!IMPORTANT]
-> **Access**: Reviewers will be provided VPN access to our testbed infrastructure. Please reach out the  [authors](#support) to request access. We will ensure reviewer anonymity is preserved throughout this process.
+> **Access**: Reviewers will be provided VPN access to our testbed infrastructure. Please reach out the  [authors](#-support) to request access. We will ensure reviewer anonymity is preserved throughout this process.
 
 ## ⚙️ Environment Setup
 
-Make sure to [obtain access](#access) before proceeding with below. 
+Make sure to [obtain access](#-access) before proceeding with below. 
 
 **Default Setup**: Reviewers will be provided with a local username on both host and SmartNIC machines. The environment includes:
 - NVIDIA BLueField2 IPU with RDMA tools and drivers configured
