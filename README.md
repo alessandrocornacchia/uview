@@ -29,7 +29,7 @@ Make sure to [obtain access](#-access) before proceeding with below.
 - Pre-installed Python environment with conda and dependencies from `requirements.txt` installed
 - Kubernetes cluster with microservices applications and Blueprint compiler
 
-Shoud any issue occur, try to refer to [Troubleshooting](#-troubleshooting) guide
+Shoud any issue occur with the configuration or should the reviewers reproduce manual install, please refer to [Troubleshooting](#-troubleshooting) guide
 
 ### System architecture
 
