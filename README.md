@@ -19,7 +19,7 @@ This repository contains instructions to access our artifats and reproduce the e
 > [!IMPORTANT]
 > **Access**: Reviewers will be provided VPN access to our testbed infrastructure. Please reach out the  [authors](#-support) to request access. We will ensure reviewer anonymity is preserved throughout this process.
 
-## ⚙️ Environment Setup
+## ⚙️ Environment
 
 Make sure to [obtain access](#-access) before proceeding with below. 
 
@@ -29,6 +29,7 @@ Make sure to [obtain access](#-access) before proceeding with below.
 - Pre-installed Python environment with conda and dependencies from `requirements.txt` installed
 - Kubernetes cluster with microservices applications and Blueprint compiler
 
+Shoud any issue occur, try to refer to [Troubleshooting](#-troubleshooting) guide
 
 ### System architecture
 
@@ -52,48 +53,6 @@ The testbed consists of a host machine connected to a BlueField2 SmartNIC via RD
     * `10.200.0.52` on `enp3s0f1s0` 
 
 
-#### Connectivity check
-
-Please verify connectivity with: `ping 192.168.100.2` (from host) and `ping 192.168.100.1` (from SmartNIC).
-
-**RDMA**. Verify via `ib` utilities. For example: start RDMA server on IPU with `ib_write_bw -d mlx5_3 -i 1` and try to connect from host-side with `ib_write_bw -d mlx5_1 -i 1 10.200.0.52`
-
-Simply activate the environment:
-```bash
-conda activate uview
-cd uview
-```
-
-### 🛠️ Manual Installation (Fallback)
-
-If the provided environment has issues, follow these steps:
-
-<details>
-<summary>Click to expand manual installation instructions</summary>
-
-**Install Dependencies**:
-```bash
-# System packages
-sudo apt-get update
-sudo apt-get install -y python3 python3-pip wrk git ibverbs-utils rdma-core libibverbs-dev
-
-# Python environment
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-bash Miniconda3-latest-Linux-x86_64.sh
-conda create --name uview python=3.11
-conda activate uview
-pip install -r requirements.txt
-```
-
-**Verify RDMA Setup**:
-```bash
-# Check RDMA devices
-ibstat
-show_gids | grep enp3s0f1s0  # On SmartNIC
-```
-
-</details>
-
 ## 🚀 Getting Started
 
 This section demonstrates a basic MicroView kick-off before running full benchmarks. The goal is to:
@@ -101,11 +60,16 @@ This section demonstrates a basic MicroView kick-off before running full benchma
 2. and verify they can exchange control plane information and connect the RDMA QPs
 3. start a process on the host that generates metrics from user-space and verify MicroView IPU component can read such metrics
 
+Activate a conda environment:
+```bash
+conda activate uview
+cd uview
+```
+
 ### Step 1: Start MicroView Host Agent
 
 On the **host machine**:
 ```bash
-conda activate uview
 python microview-host.py --rdma-queues 1
 ```
 
@@ -144,7 +108,6 @@ Expected output: Host agent starts and listens for RDMA connections.
 
 In a **new terminal on the host**:
 ```bash
-conda activate uview
 python libmicroview.py --debug --num-metrics 16 --update-metrics
 ```
 
@@ -197,8 +160,37 @@ Please refer to the two sections individually for further instructions about the
 
 ## 🔧 Troubleshooting
 
+### 🛠️ Manual Install (Fallback)
+
+**Install Dependencies**:
+```bash
+# System packages
+sudo apt-get update
+sudo apt-get install -y python3 python3-pip wrk git ibverbs-utils rdma-core libibverbs-dev
+
+# Python environment
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+bash Miniconda3-latest-Linux-x86_64.sh
+conda create --name uview python=3.11
+conda activate uview
+pip install -r requirements.txt
+```
+
 ### 🚨 Connection Issues
-- **Port Already in Use**: Kill existing processes: e.g., `pkill -f microview-nic.py`
+
+#### Connectivity check
+
+Please verify connectivity with: `ping 192.168.100.2` (from host) and `ping 192.168.100.1` (from SmartNIC).
+
+**Verify RDMA Setup**:
+```bash
+# Check RDMA devices
+ibstat
+show_gids | grep enp3s0f1s0  # On SmartNIC
+```
+
+- **Check RDMA one-sided operations**. Verify RDMA one-sided operations are healthy via `ib` utilities.  Start RDMA server on IPU with `ib_write_bw -d mlx5_3 -i 1` and try to connect from host-side with `ib_write_bw -d mlx5_1 -i 1 10.200.0.52`
+- **Port Already in Use**: If you get these errors, kill pre-existing microview processes: e.g., `pkill -f microview-nic.py`
 
 ### 🐛 Debug Mode
 For detailed troubleshooting, run all components with `--debug`:
