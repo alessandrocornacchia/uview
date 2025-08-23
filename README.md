@@ -153,8 +153,11 @@ If all steps complete successfully, MicroView is working correctly and ready for
 
 We provide separate instructions to evaluate the artifacts and reproduce the paper's experimental results. 
 
-- **[📊 IPU Micro-Benchmarks Guide →](ipu-benchmarks.md)** guide to full benchmark of MicroView's performance on IPU
-- **[📊 Use-Cases on Kubernetes Microservices Apps →](use-cases.md)** deploy microservice applications, inject failures and generate observability data
+- **[📊 Motivation (Sec.2) →](cadvisor-scalability/README.md)** measuring generation and ingestion costs of cAdvisor + Prometheus
+- **[📊 IPU Micro-Benchmarks Guide (Sec.6.1) →](ipu-benchmarks.md)** guide to benchmarks of MicroView's performance on IPU
+- **[📊 Distributed Tracing for Microservices Apps (Sec.6.3) →](usecases/README.md)** deploy microservice applications, inject failures and generate observability data
+- **[📊 Adaptive Metrics Sampling for Microservices Apps (Sec.6.4) →](adaptive-sampling/README.md)** deploy microservice applications, inject failures and generate observability data
+- **[📊 Horizontal Autoscaling Microbenchmark (Sec.6.5) →](horizontal-autoscaling/README.md)** deploying and rescaling a microservice on Kubernetes to test MicroView under dynamic conditions
 
 Please refer to the two sections individually for further instructions about the maturity of this repo relative to the content of the paper.
 
