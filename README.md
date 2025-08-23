@@ -120,7 +120,7 @@ On the **SmartNIC** (BlueField2):
 conda activate uview
 python microview-nic.py \
     --control-plane 172.18.0.39:5000 \
-    --device mlx5_3 \
+    --dev mlx5_3 \
     --gid 1 \
     --ib-port 1 \
     --test read_loop \
