@@ -1,0 +1,34 @@
+# use this configuration file to specify which metrics you do not want to collect
+
+namespace: hpa-walkthrough
+
+blacklist:
+  services:
+    - otelcollector
+    - loadgenerator
+    - jaeger-all-in-one
+  cAdvisor:
+    - container_start_time_seconds
+    - container_last_seen
+
+# these are those to collect (cannot specify both whitelist and blacklist)
+whitelist:
+  kube:
+    #names:
+    queries:
+      - kube_horizontalpodautoscaler_status_current_replicas{namespace='hpa-walkthrough'}
+      - kube_horizontalpodautoscaler_status_desired_replicas{namespace='hpa-walkthrough'}
+      - kube_horizontalpodautoscaler_status_target_metric{namespace='hpa-walkthrough'}
+      - sum(kube_pod_status_phase{namespace='hpa-walkthrough', pod=~'%s-.*'}) by (phase)
+
+metrics:  
+  istio: false
+  envoy: false
+  cAdvisor: 
+    enable: true
+    containerLabel: "php-apache.*|istio-proxy"  # server|istio-proxy
+    aggFunction: "max"
+  nodeExporter: false
+  kube: true
+  histograms: false
+  scrapingIntervalSeconds: 1

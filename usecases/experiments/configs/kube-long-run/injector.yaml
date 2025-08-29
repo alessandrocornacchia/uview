@@ -1,0 +1,41 @@
+
+# list of anomalies to be used in the experiment and their parameters
+# names must match those defined in injectors.py.
+# See injectors.py --help for more information
+
+# this is used to distinguish between Docker Compose and kubernetes deployments
+namespace: online-boutique
+
+# these are containers we do not want to inject anomalies into
+blacklist:
+  - otel
+  - loadgenerator
+  - jaeger
+  - prometheus
+  - tracing
+  - httpbin
+
+anomalies:
+  
+  # every random in [1, period_max_seconds] seconds inject an anomaly
+  period_max_seconds: 300
+
+  num_injection_rounds: 5
+
+  # start_delay: '8m'
+    
+  stressors:
+    cpu:
+      ncpu: 10
+      load: 100
+      # when random_min_duration is used, this is the max duration
+      duration: 30
+      random_min_duration: 5  # 0 to disable
+
+    mem_capacity:
+      threads: 20
+      size: "70%"
+      # when random_min_duration is used, this is the max duration
+      duration: 30
+      random_min_duration: 5  # 0 to disable
+

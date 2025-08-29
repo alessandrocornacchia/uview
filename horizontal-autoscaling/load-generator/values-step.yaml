@@ -1,0 +1,22 @@
+# Default values for load-generator.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+loadShape: "linear"
+locustFile: "step.py" # step.py
+
+env:
+  - name: SPAWN_RATE
+    value: "0.5"  # for uniform spawn this should be STEP_LOAD/STEP_TIME
+  - name: USER_WAIT_TIME
+    value: "3"
+  #- name: URL
+  #  value: "/notexisting"
+  - name: USERS
+    value: "5"
+  - name: STEP_TIME
+    value: "50"
+  - name: STEP_LOAD
+    value: "2"
+  - name: TIME_LIMIT
+    value: "3600"

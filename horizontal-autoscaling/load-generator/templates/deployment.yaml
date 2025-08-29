@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "load-generator.name" . }}-{{ .Values.loadShape }}
+  labels:
+    {{- include "load-generator.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "load-generator.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+        sidecar.istio.io/rewriteAppHTTPProbers: "true"
+      {{- end }}
+      labels:
+        {{- include "load-generator.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "load-generator.serviceAccountName" . }}
+      terminationGracePeriodSeconds: 5
+      restartPolicy: Always
+      initContainers:
+      - command:
+        - /bin/sh
+        - -exc
+        - |
+          echo "Init container pinging frontend: ${FRONTEND_ADDR}..."
+          STATUSCODE=$(wget --server-response http://${FRONTEND_ADDR} 2>&1 | awk '/^  HTTP/{print $2}')
+          if test $STATUSCODE -ne 200; then
+              echo "Error: Could not reach frontend - Status code: ${STATUSCODE}"
+              exit 1
+          fi
+        name: server-check
+        image: busybox:latest
+        env:
+        - name: FRONTEND_ADDR
+          value: {{ .Values.server }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          command: ["locust"]
+          args: ["--headless", "--host=http://$(FRONTEND_ADDR)", "-u", "$(USERS)", "-r", "$(SPAWN_RATE)", "-f", "/loadgen/locustfile.py"]
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          volumeMounts:
+          - mountPath: /loadgen
+            name: locust
+          env:
+          - name: FRONTEND_ADDR
+            value: {{ .Values.server }}
+          {{- if .Values.env }}
+            {{- toYaml .Values.env | nindent 10 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      # here we add either the base or spike configuration
+      volumes:
+        - name: locust
+          configMap:
+            name: locust-config-{{ .Values.loadShape }}

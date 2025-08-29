@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: locust-config-{{ .Values.loadShape }}
+  #labels:
+# when indent it needs to start at the beginning of the line!
+data:
+  locustfile.py: |-
+{{ .Files.Get .Values.locustFile | indent 4}}

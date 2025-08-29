@@ -1,0 +1,23 @@
+services:
+  cadvisor:
+    command: -housekeeping_interval=${HOUSEKEEPING_INTERVAL:-30s}
+    hostname: cadvisor
+    image: gcr.io/cadvisor/cadvisor
+    ports:
+    - 8080:8080
+    volumes:
+    - /:/rootfs:ro
+    - /var/run:/var/run:ro
+    - /sys:/sys:ro
+    - /var/lib/docker/:/var/lib/docker:ro
+    - /dev/disk/:/dev/disk:ro
+  prometheus:
+    image: prom/prometheus
+    ports:
+    - 9090:9090
+    volumes:
+    - ./prometheus.yml:/etc/prometheus/prometheus.yml
+  redis:
+    deploy:
+      replicas: 1000
+    image: redis

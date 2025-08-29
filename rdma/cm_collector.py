@@ -11,12 +11,15 @@ PAGE_SIZE = 4096
 
 class RDMACollectorCm:
     """
-    Collector that uses RDMA CM to read metrics from remote host memory.
+    Collector that uses RDMA CM (Connection Management) library to read metrics from remote host memory.
     Uses a single Queue Pair in Reliable Connection (RC) mode.
     Memory regions (MR) to read from, and corresponding Rkeys, are provided by the external control plane.
     For performacnce optimizations, the MR size by default is set to page size (4096 bytes).
-    TODO: Control plane here should be responsible of providing the remote memory regions to read from, possibly being continguous in memory in the remote host.
+    
+    NOTE: This module is not used in the current implementation of MicroView.
     """
+
+
     def __init__(self, host_addr: str, port: str = "18515"):
         """
         Initialize an RDMA collector to read metrics from remote memory.

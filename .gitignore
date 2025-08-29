@@ -9,7 +9,10 @@ __pycache__/**
 *.pyc
 *.log
 **.csv
+!faults.csv
 results**
+.vscode/
+.vs/
 
 plot/**pdf
 plot/**png
@@ -17,6 +20,8 @@ plot/**png
 logs/**
 results/**
 
-# ignore here as they are linux links
+# ignore here as they are linux symlinks
 **/docker/utils.py
 **/docker/libmicroview.py
+
+**.original

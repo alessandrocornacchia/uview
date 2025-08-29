@@ -31,6 +31,7 @@ class FrequentDirections(MatrixSketcherBase):
             [_, s, Vt] = svd(self._sketch, full_matrices=False)
         except:
             print(vector)
+            print('Is NaN:', isnan(vector).any(), 'Is Inf:', isinf(vector).any())
             raise ValueError()
         # shrunking all by same amount (this guarantees last row is zero)
         sShrunk = sqrt(maximum(s ** 2 - s[self.ell-1] ** 2, 0))

@@ -1,15 +1,13 @@
 #!/bin/bash
 
-# MicroView Distributed Deployment Script
+########################################################################
+#             MicroView Distributed Deployment Script
 # Runs host and generators on local machine, collector on remote machine
+########################################################################
 
 set -e  # Exit on error
 
-# TODO we let already the python script override the configuration with default values
-# should move everything in a dedicated .env file. Then from benchmark scripts in
-# python one can load default env variables.
-
-# Configuration (can be overridden by environment variables)
+# Default configuration (can be overridden by environment variables)
 LOCAL_HOST=${LOCAL_HOST:-"0.0.0.0"}
 LOCAL_PORT=${LOCAL_PORT:-5000}
 LOCAL_PUBLIC_IP=${LOCAL_PUBLIC_IP:-$(hostname -I | awk '{print $1}')}  # Automatically get local IP
@@ -43,7 +41,10 @@ EXPERIMENT_MODE=${EXPERIMENT_MODE:-"read_loop"}
 EXPERIMENT_LABEL=${EXPERIMENT_LABEL:-""}
 # Duration of the experiment in seconds (0 for infinite until user stops)
 EXPERIMENT_DURATION=${EXPERIMENT_DURATION:-0}
-WRK_RESULT_DIR=${WRK_RESULT_DIR:-"./results"}
+
+RESULT_DIR=${RESULT_DIR:-"./results"}
+# Project folder on IPU
+ROOT_DIR=${ROOT_DIR:-$(basename "$(pwd)")}
 
 # Create logs directory if it doesn't exist
 mkdir -p $LOGS_DIR
@@ -67,20 +68,20 @@ handle_results() {
 
     if [[ $LOCAL_RUN -eq 1 ]]; then
         # Move files locally
-        mkdir -p ./results/$EXPERIMENT_LABEL
-        rm -rf ./results/$EXPERIMENT_LABEL/*
-        mv ./stats_*.csv ./results/$EXPERIMENT_LABEL/
-        mv ./logs/microview_collector.log ./results/$EXPERIMENT_LABEL/
-        echo "Statistics files moved to ./results/$EXPERIMENT_LABEL/"
+        mkdir -p $RESULT_DIR/$EXPERIMENT_LABEL
+        rm -rf $RESULT_DIR/$EXPERIMENT_LABEL/*
+        mv ./stats_*.csv $RESULT_DIR/$EXPERIMENT_LABEL/
+        mv ./logs/microview_collector.log $RESULT_DIR/$EXPERIMENT_LABEL/
+        log "Statistics files moved to $RESULT_DIR/$EXPERIMENT_LABEL/"
     else
         # do that on ssh      
         ssh $REMOTE_HOST "\
-        cd $MYUSER/microview-cp/ \
-        && mkdir -p ./results/$EXPERIMENT_LABEL \
-        && rm -rf ./results/$EXPERIMENT_LABEL/* \
-        && mv ./stats_*.csv ./results/$EXPERIMENT_LABEL/ \
-        && mv ./logs/microview_collector.log ./results/$EXPERIMENT_LABEL/ \
-        && echo \"Statistics files moved to ./results/$EXPERIMENT_LABEL/\" 
+        cd $ROOT_DIR/ \
+        && mkdir -p $RESULT_DIR/$EXPERIMENT_LABEL \
+        && rm -rf $RESULT_DIR/$EXPERIMENT_LABEL/* \
+        && mv ./stats_*.csv $RESULT_DIR/$EXPERIMENT_LABEL/ \
+        && mv ./logs/microview_collector.log $RESULT_DIR/$EXPERIMENT_LABEL/ \
+        && echo \"Statistics files moved to $RESULT_DIR/$EXPERIMENT_LABEL/\" 
         "
       fi
   
@@ -92,10 +93,20 @@ log() {
   echo "[$(date +%T)] $1" | tee -a "${LOGS_DIR}/main.log"
 }
 
+interrupted_by_user() {
+  echo ""
+  log "⚠️ Interrupted by user, cleaning up..."
+  cleanup "1"
+  exit 1
+}
+
+
 # Clean up function
 cleanup() {
-      
-  echo "Forwarding signal to all processes..."
+  
+  local interrupted=${1:-0} 
+
+  log "Forwarding signal to all processes..."
   
   # Send SIGTERM first to allow graceful cleanup
   [[ -n $HOST_PID ]] && kill -TERM $HOST_PID 2>/dev/null || true
@@ -111,23 +122,6 @@ cleanup() {
     [[ -n $MICROVIEW_READER_PID ]] && ssh $REMOTE_HOST "kill -TERM $MICROVIEW_READER_PID" 2>/dev/null || true
   fi
   
-  # # Wait a moment for processes to clean up before force killing
-  # # here they might be dumpting data to the disk
-  # sleep 10
-  
-  # # Force kill any remaining processes
-  # [[ -n $HOST_PID ]] && kill -9 $HOST_PID 2>/dev/null || true
-  # for pid in "${CLIENT_PIDS[@]}"; do
-  #   kill -9 $pid 2>/dev/null || true
-  # done
-
-  # if [[ $LOCAL_RUN -eq 1 ]]; then
-  #   # If running locally
-  #   [[ -n $MICROVIEW_READER_PID ]] && kill -9 $MICROVIEW_READER_PID 2>/dev/null || true
-  # else
-  #   [[ -n $MICROVIEW_READER_PID ]] && ssh $REMOTE_HOST "kill -9 $MICROVIEW_READER_PID" 2>/dev/null || true
-  # fi
-
   # Wait for microview reader processes to terminate, loop until process ID is found alive
   if [[ $LOCAL_RUN -eq 1 ]]; then
     # If running locally
@@ -139,9 +133,16 @@ cleanup() {
     ssh $REMOTE_HOST "while ps -p $MICROVIEW_READER_PID > /dev/null; do sleep 1; done"
   fi
   
-  handle_results
+  # remove shared memory block if left open for any reason
+  rm -f /dev/shm/microview
 
-  echo "All processes terminated"
+  # if the process was not interrupted by user, handle results
+  if [[ $interrupted -eq 0 ]]; then
+    handle_results
+  fi
+  
+  log "✔️ All processes terminated"
+  echo ""
 
 }
 
@@ -152,28 +153,26 @@ _conda() {
     source "$(conda info --base)/etc/profile.d/conda.sh"
     conda activate $CONDA_ENV_NAME
   else
-    echo "Conda environment already activated: $CONDA_DEFAULT_ENV"
+    log "Conda environment already activated: $CONDA_DEFAULT_ENV"
   fi
 }
 
 
 # Run wrk benchmark that scrapes Prometheus endpoint
 run_wrk_benchmark() {
-  local result_dir="$WRK_RESULT_DIR"
+  local result_dir="$RESULT_DIR"
   local target_url
   local benchmark_duration="$EXPERIMENT_DURATION"
   
   if [[ $LOCAL_RUN -eq 1 ]]; then
     target_url="http://localhost:$PROMETHEUS_PORT/metrics"
   else
-    # Strip username from the remote host for URL
-    # TODO
     target_url="http://10.200.0.52:$PROMETHEUS_PORT/metrics"
   fi
   
   # Create results directory using experiment label if provided
   if [ -n "$EXPERIMENT_LABEL" ]; then
-    result_dir="$WRK_RESULT_DIR/$EXPERIMENT_LABEL"
+    result_dir="$RESULT_DIR/$EXPERIMENT_LABEL"
   fi
   mkdir -p "$result_dir"
   
@@ -193,7 +192,7 @@ run_wrk_benchmark() {
 
 
 # Set up trap
-trap cleanup INT TERM
+trap interrupted_by_user INT TERM
 
 log "Starting MicroView distributed system:"
 log "- Local host: $LOCAL_PUBLIC_IP:$LOCAL_PORT"
@@ -260,46 +259,54 @@ if [[ $LOCAL_RUN -eq 1 ]]; then
     log "Local collector started with PID $MICROVIEW_READER_PID"
   
 else
-    # Create empty file first
-    > "/tmp/remote_script.sh"
+    # Create the remote script using heredoc
+    cat > "/tmp/remote_script.sh" << EOF
+cd $ROOT_DIR
+# uncomment below for development purposes to avoid copy & paste
+# git pull
+if [ ! -d "logs" ]; then mkdir logs ; fi
+conda activate $CONDA_ENV_NAME
+python microview-nic.py \\
+    -c $LOCAL_PUBLIC_IP:$LOCAL_PORT \\
+    -l $NUM_LMAPS \\
+    -d $IPU_RDMA_DEVICE \\
+    --gid $IPU_RDMA_GID \\
+    --ib-port $IPU_RDMA_IB_PORT \\
+    -s $UVIEW_SCRAPING_INTERVAL \\
+    -m $CLASSIFICATION_MODEL \\
+    --test $EXPERIMENT_MODE \\
+    $([ "$DEBUG" = true ] && echo "--debug") &> ./logs/microview_collector.log &
+MICROVIEW_COLLECTOR_PID=\$!
 
-    # Create the remote script
-    echo "cd $MYUSER/microview-cp" >> "/tmp/remote_script.sh"
-    echo "git pull" >> "/tmp/remote_script.sh"
-    echo "if [ ! -d "logs" ]; then mkdir logs ; fi" >> "/tmp/remote_script.sh"
-    echo "conda activate $CONDA_ENV_NAME" >> "/tmp/remote_script.sh"
-    echo "python microview-nic.py \
-    -c $LOCAL_PUBLIC_IP:$LOCAL_PORT \
-    -l $NUM_LMAPS \
-    -d $IPU_RDMA_DEVICE \
-    --gid $IPU_RDMA_GID \
-    --ib-port $IPU_RDMA_IB_PORT \
-    -s $UVIEW_SCRAPING_INTERVAL \
-    -m $CLASSIFICATION_MODEL \
-    --test $EXPERIMENT_MODE \
-    $([ "$DEBUG" = true ] && echo "--debug") &> ./logs/microview_collector.log &" >> "/tmp/remote_script.sh"
-    echo "MICROVIEW_COLLECTOR_PID=\$!" >> "/tmp/remote_script.sh"
-    # TODO if the smartnic is not responsive this is a life saver to kill after a while
-    # TODO echo "(sleep $WATCHDOG_TIMER; kill -9 \$MICROVIEW_COLLECTOR_PID) &" >> "/tmp/remote_script.sh"
-    # important: pid is needed to kill the process later, this must be last line
-    echo "echo \$MICROVIEW_COLLECTOR_PID" >> "/tmp/remote_script.sh"
-
+# keep this as last line: pid is needed to kill the process later
+# verify the script is running with the right PID, if not something went wrong echo PID -1
+ps -p \$MICROVIEW_COLLECTOR_PID > /dev/null && echo \$MICROVIEW_COLLECTOR_PID || echo -1
+EOF
+    
+    
+    
     # Execute the script on the remote machine, and store the PID to kill later
     ssh $REMOTE_HOST bash -ls < /tmp/remote_script.sh > "${LOGS_DIR}/.remote_pid.txt"
     # store in file to kill later at sigterm
     MICROVIEW_READER_PID=$(tail -n 1 "${LOGS_DIR}/.remote_pid.txt")
+    if [[ $MICROVIEW_READER_PID -eq -1 ]]; then
+      log "❌ Error: Failed to start remote collector. Please check the logs at ${LOGS_DIR}/.remote_pid.txt and on the remote machine."
+      exit 1
+    fi
     log "Remote NIC collector started with PID $MICROVIEW_READER_PID"
 fi
 
-
-log "All components started:"
-log "- Host agent: logs in ${LOGS_DIR}/host.log"
-log "- Clients: logs in ${LOGS_DIR}/generator_*.log"
-log "- Collector: logs on remote machine at ./logs/microview_collector.log"
+# here success!
+echo ""
+echo "================================================================================="
+log "🎉 All components started:"
+log "- 📃 Host agent logs in ${LOGS_DIR}/host.log"
+log "- 📃 Metric generator logs in ${LOGS_DIR}/generator_*.log"
+log "- 📃 NIC agents logs on $REMOTE_HOST:./$ROOT_DIR/logs/microview_collector.log"
 if [[ $EXPERIMENT_MODE == "prometheus" ]]; then
   log "- Prometheus metrics available at http://10.200.0.52:$PROMETHEUS_PORT/metrics"
 fi
-
+echo ""
 
 
 # Three run mode:
@@ -321,10 +328,13 @@ if [[ $EXPERIMENT_MODE == "prometheus" ]]; then
   cleanup
 elif [ $EXPERIMENT_DURATION -gt 0 ]; then
   log "Running for $EXPERIMENT_DURATION seconds..."
+  echo ""
   sleep $EXPERIMENT_DURATION
   cleanup
 else
   log "Press Ctrl+C to stop"
+  echo "================================================================================="
+  echo ""
   tail -f "${LOGS_DIR}/host.log" #"$([ "$LOCAL_RUN" -eq 1 ] && echo "${LOGS_DIR}/microview_collector.log")"
   # here cleanup is called by the trap
 fi

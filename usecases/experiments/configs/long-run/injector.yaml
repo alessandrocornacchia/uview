@@ -1,0 +1,45 @@
+# blueprint app settings
+
+# app: dsb_hotel
+# app_dir: "/home/cornaca/llm-micro/apps/"
+# build_dir: "build/original"
+
+# list of anomalies to be used in the experiment and their parameters
+# names must match those defined in injectors.py.
+# See injectors.py --help for more information
+anomalies:
+  
+  # every random in [1, period_max_seconds] seconds inject an anomaly
+  period_max_seconds: 120
+
+  num_injection_rounds: 30
+
+  start_delay: '8m'
+    
+  stressors:
+    cpu:
+      ncpu: 10
+      duration: 30
+      random_min_duration: 5  # 0 to disable
+
+    mem_capacity:
+      size: 75M
+      duration: 30
+      threads: 2
+      random_min_duration: 5
+
+    io:
+      size: 200M
+      duration: 2
+      threads: 128
+      random_min_duration: 0
+
+    llc:
+      duration: 5
+      random_min_duration: 0
+
+    mem_bw:
+      duration: 1
+      random_min_duration: 0
+
+

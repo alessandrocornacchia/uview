@@ -1,0 +1,27 @@
+# use this configuration file to specify which metrics you do not want to collect
+
+global:  
+  histograms: false
+  scrapingIntervalSeconds: 2  # TODO: this must be consistent with the scraping interval of the prometheus server
+  # label you want to use in cAdvisor to filter by service
+  service_label: container_label_com_docker_compose_service
+
+  
+# metrics/services to prune -> collect all except
+cAdvisor:
+  aggFunction: "sum"
+  
+  blacklist:
+    metrics:
+      - container_start_time_seconds
+      - container_last_seen
+
+# kube: # we don't use kubernetes --> ignore this
+#   # collect ONLY these
+#   whitelist:
+#     queries:
+#       - kube_horizontalpodautoscaler_status_current_replicas{namespace='hpa-walkthrough'}
+#       - kube_horizontalpodautoscaler_status_desired_replicas{namespace='hpa-walkthrough'}
+#       - kube_horizontalpodautoscaler_status_target_metric{namespace='hpa-walkthrough'}
+#       - sum(kube_pod_status_phase{namespace='hpa-walkthrough', pod=~'%s-.*'}) by (phase)
+

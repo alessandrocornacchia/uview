@@ -1,4 +1,7 @@
 # mock_rdma.py
+
+"""Mock RDMA module for testing without actual RDMA hardware or libraries."""
+
 class MockMemoryRegion:
     def read(self, offset, length):
         # Return mock data that matches your expected format

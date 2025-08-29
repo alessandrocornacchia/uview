@@ -1,0 +1,10 @@
+directory: /data/scratch/cornaca/hpa/metrics
+duration: 60
+end: 2023-11-08 12:10:00 UTC+01
+pod: php-apache
+test_end: '2023-11-08 12:10:00'
+test_start: '2023-11-08 11:30:00'
+testsize: (2401, 75)
+train_end: '2023-11-08 11:30:00'
+train_start: '2023-11-08 11:10:00'
+trainsize: (1201, 75)
