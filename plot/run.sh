@@ -7,7 +7,7 @@ export EXPERIMENT_NAME="aec-nsdi"
 export REMOTE_HOST="mcbf28"
 
 # path to artifacts on the IPU (check tests/benchmarks/tput.py)
-export REMOTE_PATH="/home/temp/aec-nsdi-1/uview/results/$EXPERIMENT_NAME"
+export REMOTE_PATH="/home/temp/$USER/uview/results/$EXPERIMENT_NAME"
 
 # local path to store artifacts and figures
 export LOCAL_PATH="$HOME/uview/results/$EXPERIMENT_NAME"

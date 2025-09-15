@@ -176,7 +176,7 @@ Make sure `conda` or `mamba` is installed:
 ```bash
 # Python environment
 wget "https://repo.anaconda.com/miniconda/Miniforge3-$(uname)-$(uname -m).sh"
-bash bash Miniforge3-$(uname)-$(uname -m).sh
+bash Miniforge3-$(uname)-$(uname -m).sh
 ```
 
 Clone repo and setup environment:
@@ -187,12 +187,17 @@ mamba env create -f mamba-env.yml
 mamba activate uview
 ```
 
-We found issues with some requirements in certain environments (for example `pyverbs` on the Bluefield2) while compiling the Python wheels. 
+#### Install `pyverbs` 
 
-In our case, this was solved by installing `pyverbs` manually at the very end:
+We encountered issues when installing `pyverbs` via `pip`.
+
+The Python wheels compile, however, out of all symbols that should be defined within the module `pyverbs.enums` only a few can be actually found when running a python script (See `tests/hello_pyverbs/pyverbs-symbols.py`)
+
+As a workaround, we solved by creating a symlink to the system installation. 
+To install `pyverbs` manually, run:
 
 ```bash
-pip install  --verbose --no-cache-dir pyverbs==56.0rc5
+./pyverbs-install.sh
 ```
 
 ### 🚨 Connection Issues

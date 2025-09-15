@@ -10,9 +10,9 @@ TRAIN_START_TIME="2024-11-08 11:10:00"
 TRAIN_END_TIME="2024-11-08 11:30:00"
 TEST_START_TIME=$TRAIN_END_TIME
 TEST_END_TIME="2024-11-08 12:10:00"
-METRICS_DIR="/home/temp/aec-nsdi-1/uview/horizontal-autoscaling/metrics"
+METRICS_DIR="/home/temp/$USER/uview/horizontal-autoscaling/metrics"
 
-cd "/home/temp/aec-nsdi-1/uview/horizontal-autoscaling/"
+cd "/home/temp/$USER/uview/horizontal-autoscaling/"
     
 CMD=(
 "python" 

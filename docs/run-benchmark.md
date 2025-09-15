@@ -3,7 +3,7 @@
 This section contains the instructions to reproduce the micro-benchmarks of MicroView on IPU as described in Section 6.2 of the paper.
 
 ## Prerequisites
-Make sure to follow the [Getting Started](README.md#-getting-started) guide to verify the setup is working correctly and basic functionalities of MicroView, including access to the IPU instance.
+Make sure to follow the [Getting Started](../README.md#-getting-started) guide to verify the setup is working correctly and basic functionalities of MicroView, including access to the IPU instance.
 
 ## Run the microbenchmarks (~10h)
 
