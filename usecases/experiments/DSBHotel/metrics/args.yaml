@@ -1,0 +1,8 @@
+config: ./metric_config.yaml
+directory: /home/temp/aec-nsdi-1/uview/usecases/experiments/DSBHotel/metrics
+duration: null
+end_time: 2025-08-20 12:10:29 UTC+00
+endpoint: mcnode17:9090
+metrics_time_resolution: 1
+service: frontend_service
+start_time: 2025-08-20 11:31:04 UTC+00

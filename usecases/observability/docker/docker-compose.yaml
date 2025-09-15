@@ -1,0 +1,55 @@
+# specify name for the docker compose project
+name: monitoring
+
+services:
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor
+    # networks:
+    #   - monitoring
+    hostname: cadvisor
+#    platform: linux/aarch64
+    volumes:
+      - "/:/rootfs:ro"
+      - "/var/run:/var/run:ro"
+      - "/sys:/sys:ro"
+      - "/var/lib/docker/:/var/lib/docker:ro"
+      - "/dev/disk/:/dev/disk:ro"
+    ports:
+      - "8080:8080"
+    command: -housekeeping_interval=${HOUSEKEEPING_INTERVAL?30s}
+  
+  prometheus:
+    image: prom/prometheus
+    # networks:
+    #   - monitoring
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    command: [ 
+      "--config.file=/etc/prometheus/prometheus.yml",
+      "--storage.tsdb.path=/prometheus",
+      "--web.console.libraries=/etc/prometheus/console_libraries",
+      "--web.console.templates=/etc/prometheus/consoles",
+      "--storage.tsdb.retention.time=14d",
+      "--storage.tsdb.retention.size=100GB" 
+    ]
+  
+networks:
+  # monitoring:
+  #   external: false
+
+  default:
+    external: true
+    name: docker_default
+
+  # grafana:
+  #   image: grafana/grafana
+  #   environment: 
+  #     GF_SECURITY_DISABLE_INITIAL_ADMIN_CREATION: "true"
+  #     GF_AUTH_ANONYMOUS_ENABLED: "true"
+  #     GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+  #     GF_AUTH_DISABLE_SIGNOUT_MENU: "true"
+  #     GF_AUTH_DISABLE_LOGIN_FORM: "true"
+  #   ports:
+  #     - "9100:3000"

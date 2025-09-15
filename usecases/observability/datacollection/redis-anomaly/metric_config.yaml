@@ -1,0 +1,48 @@
+# use this configuration file to specify which metrics you do not want to collect
+
+namespace: online-boutique
+
+blacklist:
+  services:
+    - otelcollector
+    - loadgenerator
+    - jaeger-all-in-one
+    - jaeger
+    - httpbin
+  cAdvisor:
+    - container_start_time_seconds
+    - container_last_seen
+
+# these are those to collect (cannot specify both whitelist and blacklist)
+whitelist:
+  redis:
+    #names:
+    queries:
+      - 100 * (redis_memory_used_bytes{pod=~'redis-.*'}  / redis_memory_max_bytes{pod=~'redis-.*'} )
+      - irate(redis_commands_processed_total{pod=~'redis-.*'}[%s])
+      - irate(redis_keyspace_hits_total{pod=~'redis-.*'}[%s])
+      - irate(redis_keyspace_misses_total{pod=~'redis-.*'}[%s])
+      - redis_memory_used_bytes{pod=~'redis-.*'} 
+      - redis_memory_max_bytes{pod=~'redis-.*'}
+      - irate(redis_net_input_bytes_total{pod=~'redis-.*'}[%s])
+      - irate(redis_net_output_bytes_total{pod=~'redis-.*'}[%s])
+      - sum (redis_db_keys{pod=~'redis-.*'}) by (db)
+      - sum (redis_db_keys{pod=~'redis-.*'}) - sum (redis_db_keys_expiring{pod=~'redis-.*'}) 
+      - sum (redis_db_keys_expiring{pod=~'redis-.*'}) 
+      - sum(irate(redis_expired_keys_total{pod=~'redis-.*'}[%s])) by (instance)
+      - sum(irate(redis_evicted_keys_total{pod=~'redis-.*'}[%s])) by (instance)
+      - topk(5, irate(redis_commands_total{pod=~'redis-.*'} [%s]))
+      - redis_connected_clients{pod=~'redis-.*'}
+
+metrics:  
+  istio: true
+  envoy: false
+  cAdvisor: 
+    enable: true
+    containerLabel: "server|istio-proxy"  # server|istio-proxy
+    aggFunction: "max"
+  nodeExporter: false
+  kube: false
+  redis: true
+  histograms: false
+  scrapingIntervalSeconds: 1

@@ -1,0 +1,1 @@
+Change variable `HOUSEKEEPING_INTERVAL` in `.env` in this folder to set larger housekeping.

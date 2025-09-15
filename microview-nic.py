@@ -263,7 +263,7 @@ class MicroView(MicroViewBase):
                 # get hostname from cat /etc/hostname
                 hostname = os.popen("cat /etc/hostname").read().strip()
                 logger.info(f"Hostname: {hostname}")
-                if hostname.startswith(BF_HOSTNAME):
+                if hostname.startswith(IPU_HOSTNAME_PREFIX):
                     lmap.start_local_scrape_loop(cpu_core=i % num_cores)
                 else:
                     lmap.start_local_scrape_loop()

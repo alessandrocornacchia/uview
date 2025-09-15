@@ -575,30 +575,6 @@ class OneSidedReader:
             raise
 
     
-    # def poll_completion(self, index : int):
-    #     """
-    #     Poll for completion of RDMA READ operation
-    #     """
-    #     res = None
-        
-    #     try:
-    #         # Poll for completion
-    #         wc_num, wcs = self.cq.poll()
-        
-    #         # if there is some content return, else None
-    #         if wc_num:
-    #             if wcs[0].status != pyverbs.enums.IBV_WC_SUCCESS:
-    #                 raise RuntimeError(f"❌ RDMA READ failed with status: {wcs[0].status}")
-                
-    #             mr = self.mrm.get_memory_region(f"local_mr_{index}")
-    #             res = mr.read(mr.length, 0)
-    #             logger.debug(f"✅ RDMA READ completed successfully: {res}")
-    #     except Exception as e:
-    #         logger.error(f"❌ Error polling CQ: {e}")
-    #         raise
-            
-    #     return res
-
     def poll_completion(self, index: int, timeout_seconds: float = 1.0):
         """
         Poll for completion of RDMA READ operation with timeout

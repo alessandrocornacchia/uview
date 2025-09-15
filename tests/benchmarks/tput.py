@@ -2,11 +2,13 @@ import argparse
 import sys
 import os
 import time
+import subprocess
+import signal
 
 TIME_DURATION = 600
 METRIC_SIZE_BYTES = 64
 IPU_CORES = 8
-IPU_ADDR = "ubuntu@192.168.100.2"
+IPU_ADDR = "mcbf28" #"ubuntu@192.168.100.2"
 # reader_host = "localhost"
 reader_host = IPU_ADDR
 
@@ -19,9 +21,54 @@ args = parser.parse_args()
 
 
 #-------------------------------------------
-# here we fix number of pods and we vary number of metrics
+
+def run():
+    """ Run the benchmark using the `run.sh` script. 
+    Handles graceful termination by waiting for the subprocess to clean up.
+    """
+
+    # run sh script and stream output to terminal
+    try:
+        # Use Popen for better signal handling
+        process = subprocess.Popen(["./run.sh"], 
+                                    stdout=None,  # Let stdout go directly to terminal
+                                    stderr=None,  # Let stderr go directly to terminal
+                                    text=True)
+        
+        # Wait for the process to complete
+        return_code = process.wait()
+        
+        if return_code != 0:
+            print(f"ERROR: Script failed with exit code {return_code}")
+            # Optionally, you can choose to continue or exit
+            # sys.exit(1)  # Uncomment to stop on first failure
+        else:
+            print(f"SUCCESS: Script completed successfully")
+            
+    except KeyboardInterrupt:
+        
+        # Wait for cleanup with a reasonable timeout
+        try:
+            return_code = process.wait(timeout=30)  # Wait up to 30 seconds for cleanup
+        except subprocess.TimeoutExpired:
+            print("Cleanup timeout, sending SIGTERM...")
+            process.terminate()
+            try:
+                return_code = process.wait(timeout=10)  # Give 10 more seconds
+            except subprocess.TimeoutExpired:
+                print("Force killing process...")
+                process.kill()
+                return_code = process.wait()
+        
+        # Re-raise to exit the current loop/function
+        raise KeyboardInterrupt
+
+
 def run_benchmark_metrics(mode = "read_loop"):
-    """Run benchmark with varying number of metrics per pod"""
+    """
+    Run benchmark with varying number of metrics per pod
+    """
+    
     print("\n=== RUNNING METRIC COUNT BENCHMARK ===")
 
     nmetrics = [16, 64, 128, 256]
@@ -54,8 +101,7 @@ def run_benchmark_metrics(mode = "read_loop"):
             # number of LMAPs is always at most the number of cores of the IPU
             os.environ["NUM_LMAPS"] = str(min(IPU_CORES, num_pods))
 
-            if mode == "prometheus":
-                os.environ["WRK_RESULT_DIR"] = args.results_dir
+            os.environ["RESULT_DIR"] = args.results_dir
             
             os.environ["EXPERIMENT_MODE"] = mode
 
@@ -70,15 +116,16 @@ def run_benchmark_metrics(mode = "read_loop"):
             print(f"DEFAULT_RDMA_MR_SIZE: {os.environ['DEFAULT_RDMA_MR_SIZE']}")
             print("*"*50)
                 
-            # run sh script
-            os.system("./run.sh")
+            run()
 
 
-#-------------------------------------------
-# here we fix number of metrics and we vary number of pods
+
 
 def run_benchmark_pods(mode = "read_loop"):
-    """Run benchmark with varying number of pods"""
+    """
+    Run benchmark with varying number of pods
+    """
+    
     print("\n=== RUNNING POD COUNT BENCHMARK ===")
 
     nmetrics = 64
@@ -111,8 +158,8 @@ def run_benchmark_pods(mode = "read_loop"):
             # number of LMAPs is always at most the number of cores of the IPU
             os.environ["NUM_LMAPS"] = str(min(IPU_CORES, p))
 
-            if mode == "prometheus":
-                os.environ["WRK_RESULT_DIR"] = args.results_dir
+            
+            os.environ["RESULT_DIR"] = args.results_dir
             os.environ["EXPERIMENT_MODE"] = mode
 
             print("*"*50)
@@ -126,9 +173,7 @@ def run_benchmark_pods(mode = "read_loop"):
             print(f"DEFAULT_RDMA_MR_SIZE: {os.environ['DEFAULT_RDMA_MR_SIZE']}")
             print("*"*50)
                 
-            # run sh script
-            os.system("./run.sh")
-
+            run()
  
 
 
@@ -144,17 +189,21 @@ if __name__ == "__main__":
         print("Error: wrk is not installed. Please install it with: sudo apt-get install -y wrk")
         sys.exit(1)
     
-    # Run benchmarks
-    run_benchmark_metrics()
-    time.sleep(60)
-    
-    run_benchmark_pods()
-    time.sleep(60)
-    
-    run_benchmark_metrics(mode = "prometheus")
-    time.sleep(60)
-    
-    run_benchmark_pods(mode = "prometheus")
-    
-    
-    print("\nAll benchmarks completed. Results are in the results/ directory.")
+    try:
+        # Run benchmarks
+        run_benchmark_metrics()
+        time.sleep(60)
+        
+        run_benchmark_pods()
+        time.sleep(60)
+        
+        run_benchmark_metrics(mode = "prometheus")
+        time.sleep(60)
+        
+        run_benchmark_pods(mode = "prometheus")
+        
+        print("\nAll benchmarks completed. Results are in the results/ directory.")
+        
+    except KeyboardInterrupt:
+        print("\n\nBenchmark suite interrupted by user.")
+        sys.exit(130)  # Standard exit code for SIGINT
