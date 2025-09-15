@@ -28,17 +28,23 @@ This part includes steps to:
 
 ### Testbed
 
-We use two nodes for these experiments, with the following roles:
-- `mcnode17` : microservice application
-- `mcnode18` : workload generator
+### ⚠️ Important
+To avoid contentions, we suggest each reviewer starts the application microservices on a different node, with the following assignment: `aec-nsdi-1@mcnode17`, `aec-nsdi-2@mcnode18`, `aec-nsdi-3@mcnode19`.
+Avoid `mcnode28` as it is used for other artifacts. 
 
+
+We use two nodes for these experiments:
+- `mcnodeX` : microservice application (see above for node assignment)
+- `mcnode20` : workload generator
+
+**Note** The workload generator node is fixed to `mcnode20` and managed automatically by an `orchestrator.py` script. Please do not change this.
 
 ### Kick-the-tyres run (~3 minutes)
 
 Deploy and run a short experiment to test everything is in order:
 
 ```bash
-ssh mcnode17
+ssh mcnodeX
 conda activate uview
 cd ~/uview/usecases/experiments
 python orchestrator.py -c dsbhotel-test -e DSBHotel-quick --chaos --loadgen
@@ -74,7 +80,7 @@ If successful, after a couple of seconds, expected output is similar to:
 [2025-08-20 08:26:24] Use 'docker compose ps' to check container status
 [2025-08-20 08:26:24] Use 'docker compose logs -f' to follow application logs
 [2025-08-20 08:26:24] Use 'docker compose down' to stop the application
-Starting workload generator on mcnode18
+Starting workload generator on mcnode20
 
 === LOAD GENERATOR ===
 Starting async load generator for user requests. Running on: mcnode18.
@@ -85,7 +91,7 @@ Running anomaly injector with command: /home/temp/$USER/uview/usecases/chaos-eng
 ```
 
 > [!IMPORTANT]
-> Please note that the `orchestrator.py` script will deploy the Docker Compose containers on the same node where it is running. This is typically `mcnode17` in our setup.
+> Please note that the `orchestrator.py` script will deploy the Docker Compose containers on the same node where it is running. Run it on `mcnodeX` as per instructions above.
 
 ### Run paper experiments (~3 hours)
 
@@ -103,7 +109,7 @@ To detach from the session, press `Ctrl+b` followed by `d`.
 
 ```
 ```bash
-ssh mcnode17
+ssh mcnodeX
 tmux attach -t uview
 conda activate uview
 cd ~/uview/usecases/experiments
@@ -113,6 +119,20 @@ python orchestrator.py -c dsbhotel-long -e DSBHotel --chaos --loadgen
 Note that `dsbhotel-long` is a configuration available under `usecases/experiments/configs/` that runs a 1-hour experiment with multiple anomalies injected.
 
 ## 2) Kubernetes setup
+
+### ⚠️ Important
+
+For the Kubernetes setup, the reviewers should use separate namespaces to avoid interferences. 
+This is yet to be reflected in the `orchestrator.py` script, so please manually check that no other reviewers are using the same namespace. Because at the end of the experiment our orchesrator will delete resources in the namespace, you can just check if the namespace is empty before starting the experiment with the command:
+
+```bash
+kubectl get pods -n online-boutique
+```
+
+If you find this overly restrictive, please reach out and we can help you modify the script to use a different namespace automatically. Alternatively, you can run the experiment on a different testbed of your choice with Kubernetes installed.
+
+
+### Environment
 
 This will use a 3-node Kubernetes cluster. Verify the output of `kubectl get nodes` to see the nodes in the cluster.
 
