@@ -1,0 +1,224 @@
+
+version: '3'
+services:
+
+  frontend_service_container:
+    build:
+      context: frontend_service_container
+      dockerfile: ./Dockerfile
+    hostname: frontend_service_container
+    expose:
+     - "2000"
+    ports:
+     - "${FRONTEND_SERVICE_HTTP_BIND_ADDR?frontend_service.http.bind_addr must be set by the calling environment}:2000"
+    environment:
+     - FRONTEND_SERVICE_HTTP_BIND_ADDR=0.0.0.0:2000
+     - JAEGER_DIAL_ADDR=jaeger_ctr:14268
+     - PROFILE_SERVICE_GRPC_DIAL_ADDR=profile_service_container:12345
+     - RECOMD_SERVICE_GRPC_DIAL_ADDR=recomd_service_container:12345
+     - RESERV_SERVICE_GRPC_DIAL_ADDR=reserv_service_container:12345
+     - SEARCH_SERVICE_GRPC_DIAL_ADDR=search_service_container:12345
+     - USER_SERVICE_GRPC_DIAL_ADDR=user_service_container:12345
+    restart: always
+
+  geo_db_ctr:
+    image: mongo
+    hostname: geo_db_ctr
+    expose:
+     - "27017"
+    ports:
+     - "${GEO_DB_BIND_ADDR?geo_db.bind_addr must be set by the calling environment}:27017"
+    restart: always
+
+  geo_service_container:
+    build:
+      context: geo_service_container
+      dockerfile: ./Dockerfile
+    hostname: geo_service_container
+    expose:
+     - "12345"
+    ports:
+     - "${GEO_SERVICE_GRPC_BIND_ADDR?geo_service.grpc.bind_addr must be set by the calling environment}:12345"
+    environment:
+     - GEO_DB_DIAL_ADDR=geo_db_ctr:27017
+     - GEO_SERVICE_GRPC_BIND_ADDR=0.0.0.0:12345
+     - JAEGER_DIAL_ADDR=jaeger_ctr:14268
+    restart: always
+
+  jaeger_ctr:
+    image: jaegertracing/all-in-one:latest
+    hostname: jaeger_ctr
+    expose:
+     - "14268"
+     - "16686"
+    ports:
+     - "${JAEGER_BIND_ADDR?jaeger.bind_addr must be set by the calling environment}:14268"
+     - "${JAEGER_UI_BIND_ADDR?jaeger.ui.bind_addr must be set by the calling environment}:16686"
+    restart: always
+
+  profile_cache_ctr:
+    image: memcached
+    hostname: profile_cache_ctr
+    expose:
+     - "11211"
+    ports:
+     - "${PROFILE_CACHE_BIND_ADDR?profile_cache.bind_addr must be set by the calling environment}:11211"
+    restart: always
+
+  profile_db_ctr:
+    image: mongo
+    hostname: profile_db_ctr
+    expose:
+     - "27017"
+    ports:
+     - "${PROFILE_DB_BIND_ADDR?profile_db.bind_addr must be set by the calling environment}:27017"
+    restart: always
+
+  profile_service_container:
+    build:
+      context: profile_service_container
+      dockerfile: ./Dockerfile
+    hostname: profile_service_container
+    expose:
+     - "12345"
+    ports:
+     - "${PROFILE_SERVICE_GRPC_BIND_ADDR?profile_service.grpc.bind_addr must be set by the calling environment}:12345"
+    environment:
+     - JAEGER_DIAL_ADDR=jaeger_ctr:14268
+     - PROFILE_CACHE_DIAL_ADDR=profile_cache_ctr:11211
+     - PROFILE_DB_DIAL_ADDR=profile_db_ctr:27017
+     - PROFILE_SERVICE_GRPC_BIND_ADDR=0.0.0.0:12345
+    restart: always
+
+  rate_cache_ctr:
+    image: memcached
+    hostname: rate_cache_ctr
+    expose:
+     - "11211"
+    ports:
+     - "${RATE_CACHE_BIND_ADDR?rate_cache.bind_addr must be set by the calling environment}:11211"
+    restart: always
+
+  rate_db_ctr:
+    image: mongo
+    hostname: rate_db_ctr
+    expose:
+     - "27017"
+    ports:
+     - "${RATE_DB_BIND_ADDR?rate_db.bind_addr must be set by the calling environment}:27017"
+    restart: always
+
+  rate_service_container:
+    build:
+      context: rate_service_container
+      dockerfile: ./Dockerfile
+    hostname: rate_service_container
+    expose:
+     - "12345"
+    ports:
+     - "${RATE_SERVICE_GRPC_BIND_ADDR?rate_service.grpc.bind_addr must be set by the calling environment}:12345"
+    environment:
+     - JAEGER_DIAL_ADDR=jaeger_ctr:14268
+     - RATE_CACHE_DIAL_ADDR=rate_cache_ctr:11211
+     - RATE_DB_DIAL_ADDR=rate_db_ctr:27017
+     - RATE_SERVICE_GRPC_BIND_ADDR=0.0.0.0:12345
+    restart: always
+
+  recomd_db_ctr:
+    image: mongo
+    hostname: recomd_db_ctr
+    expose:
+     - "27017"
+    ports:
+     - "${RECOMD_DB_BIND_ADDR?recomd_db.bind_addr must be set by the calling environment}:27017"
+    restart: always
+
+  recomd_service_container:
+    build:
+      context: recomd_service_container
+      dockerfile: ./Dockerfile
+    hostname: recomd_service_container
+    expose:
+     - "12345"
+    ports:
+     - "${RECOMD_SERVICE_GRPC_BIND_ADDR?recomd_service.grpc.bind_addr must be set by the calling environment}:12345"
+    environment:
+     - JAEGER_DIAL_ADDR=jaeger_ctr:14268
+     - RECOMD_DB_DIAL_ADDR=recomd_db_ctr:27017
+     - RECOMD_SERVICE_GRPC_BIND_ADDR=0.0.0.0:12345
+    restart: always
+
+  reserv_cache_ctr:
+    image: memcached
+    hostname: reserv_cache_ctr
+    expose:
+     - "11211"
+    ports:
+     - "${RESERV_CACHE_BIND_ADDR?reserv_cache.bind_addr must be set by the calling environment}:11211"
+    restart: always
+
+  reserv_db_ctr:
+    image: mongo
+    hostname: reserv_db_ctr
+    expose:
+     - "27017"
+    ports:
+     - "${RESERV_DB_BIND_ADDR?reserv_db.bind_addr must be set by the calling environment}:27017"
+    restart: always
+
+  reserv_service_container:
+    build:
+      context: reserv_service_container
+      dockerfile: ./Dockerfile
+    hostname: reserv_service_container
+    expose:
+     - "12345"
+    ports:
+     - "${RESERV_SERVICE_GRPC_BIND_ADDR?reserv_service.grpc.bind_addr must be set by the calling environment}:12345"
+    environment:
+     - JAEGER_DIAL_ADDR=jaeger_ctr:14268
+     - RESERV_CACHE_DIAL_ADDR=reserv_cache_ctr:11211
+     - RESERV_DB_DIAL_ADDR=reserv_db_ctr:27017
+     - RESERV_SERVICE_GRPC_BIND_ADDR=0.0.0.0:12345
+    restart: always
+
+  search_service_container:
+    build:
+      context: search_service_container
+      dockerfile: ./Dockerfile
+    hostname: search_service_container
+    expose:
+     - "12345"
+    ports:
+     - "${SEARCH_SERVICE_GRPC_BIND_ADDR?search_service.grpc.bind_addr must be set by the calling environment}:12345"
+    environment:
+     - GEO_SERVICE_GRPC_DIAL_ADDR=geo_service_container:12345
+     - JAEGER_DIAL_ADDR=jaeger_ctr:14268
+     - RATE_SERVICE_GRPC_DIAL_ADDR=rate_service_container:12345
+     - SEARCH_SERVICE_GRPC_BIND_ADDR=0.0.0.0:12345
+    restart: always
+
+  user_db_ctr:
+    image: mongo
+    hostname: user_db_ctr
+    expose:
+     - "27017"
+    ports:
+     - "${USER_DB_BIND_ADDR?user_db.bind_addr must be set by the calling environment}:27017"
+    restart: always
+
+  user_service_container:
+    build:
+      context: user_service_container
+      dockerfile: ./Dockerfile
+    hostname: user_service_container
+    expose:
+     - "12345"
+    ports:
+     - "${USER_SERVICE_GRPC_BIND_ADDR?user_service.grpc.bind_addr must be set by the calling environment}:12345"
+    environment:
+     - JAEGER_DIAL_ADDR=jaeger_ctr:14268
+     - USER_DB_DIAL_ADDR=user_db_ctr:27017
+     - USER_SERVICE_GRPC_BIND_ADDR=0.0.0.0:12345
+    restart: always
+

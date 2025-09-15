@@ -1,0 +1,36 @@
+syntax="proto3";
+option go_package="./;grpc";
+package grpc;
+
+
+message RateService_OTServerWrapperInterface_GetRates_Request {
+    repeated string hotelIDs = 1;
+    string inDate = 2;
+    string outDate = 3;
+    string traceCtx = 4;
+}
+
+message RateService_OTServerWrapperInterface_GetRates_Response {
+    repeated RateService_RatePlan ret0 = 1;
+}
+
+message RateService_RatePlan {
+    string HotelID = 1;
+    string Code = 2;
+    string InDate = 3;
+    string OutDate = 4;
+    RateService_RoomType RType = 5;
+}
+
+message RateService_RoomType {
+    double BookableRate = 1;
+    string Code = 2;
+    string RoomDescription = 3;
+    double TotalRate = 4;
+    double TotalRateInclusive = 5;
+}
+
+service RateService_OTServerWrapperInterface {
+    rpc GetRates (RateService_OTServerWrapperInterface_GetRates_Request) returns (RateService_OTServerWrapperInterface_GetRates_Response) {}
+}
+

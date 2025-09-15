@@ -1,0 +1,19 @@
+syntax="proto3";
+option go_package="./;grpc";
+package grpc;
+
+
+message UserService_OTServerWrapperInterface_CheckUser_Request {
+    string username = 1;
+    string password = 2;
+    string traceCtx = 3;
+}
+
+message UserService_OTServerWrapperInterface_CheckUser_Response {
+    bool ret0 = 1;
+}
+
+service UserService_OTServerWrapperInterface {
+    rpc CheckUser (UserService_OTServerWrapperInterface_CheckUser_Request) returns (UserService_OTServerWrapperInterface_CheckUser_Response) {}
+}
+

@@ -1,0 +1,36 @@
+syntax="proto3";
+option go_package="./;grpc";
+package grpc;
+
+
+message ReservationService_OTServerWrapperInterface_CheckAvailability_Request {
+    string customerName = 1;
+    repeated string hotelIDs = 2;
+    string inDate = 3;
+    string outDate = 4;
+    sint64 roomNumber = 5;
+    string traceCtx = 6;
+}
+
+message ReservationService_OTServerWrapperInterface_CheckAvailability_Response {
+    repeated string ret0 = 1;
+}
+
+message ReservationService_OTServerWrapperInterface_MakeReservation_Request {
+    string customerName = 1;
+    repeated string hotelIds = 2;
+    string inDate = 3;
+    string outDate = 4;
+    sint64 roomNumber = 5;
+    string traceCtx = 6;
+}
+
+message ReservationService_OTServerWrapperInterface_MakeReservation_Response {
+    repeated string ret0 = 1;
+}
+
+service ReservationService_OTServerWrapperInterface {
+    rpc CheckAvailability (ReservationService_OTServerWrapperInterface_CheckAvailability_Request) returns (ReservationService_OTServerWrapperInterface_CheckAvailability_Response) {}
+    rpc MakeReservation (ReservationService_OTServerWrapperInterface_MakeReservation_Request) returns (ReservationService_OTServerWrapperInterface_MakeReservation_Response) {}
+}
+

@@ -1,0 +1,90 @@
+# this must be manually merged with the docker-compose.yml file 
+# when deploying the application. Use -f option of docker-compose.yml
+
+services:
+
+  geo_service_container:
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 200M
+        # reservations:
+        #   cpus: '1'
+        #   memory: 20M
+
+
+  user_service_container:
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 200M
+        # reservations:
+        #   cpus: '1'
+        #   memory: 20M
+
+
+  search_service_container:
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 200M
+        # reservations:
+        #   cpus: '1'
+        #   memory: 20M
+
+  reserv_service_container:
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 200M
+        # reservations:
+        #   cpus: '1'
+        #   memory: 20M
+
+  recomd_service_container:
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 200M
+        # reservations:
+        #   cpus: '1'
+        #   memory: 20M
+
+  rate_service_container:
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 200M
+        # reservations:
+        #   cpus: '1'
+        #   memory: 20M
+
+  profile_cache_ctr:
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 200M
+
+
+  rate_cache_ctr:
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 200M
+
+
+  reserv_cache_ctr:
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 200M
+

@@ -1,0 +1,38 @@
+syntax="proto3";
+option go_package="./;grpc";
+package grpc;
+
+
+message ProfileService_Address {
+    string StreetNumber = 1;
+    string StreetName = 2;
+    string City = 3;
+    string State = 4;
+    string Country = 5;
+    string PostalCode = 6;
+    double Lat = 7;
+    double Lon = 8;
+}
+
+message ProfileService_HotelProfile {
+    string ID = 1;
+    string Name = 2;
+    string PhoneNumber = 3;
+    string Description = 4;
+    ProfileService_Address Address = 5;
+}
+
+message ProfileService_OTServerWrapperInterface_GetProfiles_Request {
+    repeated string hotelIds = 1;
+    string locale = 2;
+    string traceCtx = 3;
+}
+
+message ProfileService_OTServerWrapperInterface_GetProfiles_Response {
+    repeated ProfileService_HotelProfile ret0 = 1;
+}
+
+service ProfileService_OTServerWrapperInterface {
+    rpc GetProfiles (ProfileService_OTServerWrapperInterface_GetProfiles_Request) returns (ProfileService_OTServerWrapperInterface_GetProfiles_Response) {}
+}
+

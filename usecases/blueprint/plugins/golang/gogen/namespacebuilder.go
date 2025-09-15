@@ -1,0 +1,290 @@
+package gogen
+
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
+
+	"github.com/blueprint-uservices/blueprint/blueprint/pkg/blueprint"
+	"github.com/blueprint-uservices/blueprint/blueprint/pkg/ir"
+	"github.com/blueprint-uservices/blueprint/plugins/golang"
+	"github.com/blueprint-uservices/blueprint/plugins/golang/gocode"
+	"golang.org/x/exp/slices"
+	"golang.org/x/exp/slog"
+)
+
+// Implements [golang.NamespaceBuilder].
+//
+// Creates a source file, {{FileName}}.go, containing a function, {{FuncName}}.
+// The body of {{FuncName}} instantiates all nodes of this namespace.
+type NamespaceBuilderImpl struct {
+	ir.VisitTrackerImpl
+	module         golang.ModuleBuilder // The module containing this file
+	Package        golang.PackageInfo
+	Name           string            // IR node name
+	FileName       string            // The short name of the file
+	FilePath       string            // The fully qualified path to the file
+	FuncName       string            // The name of the function to generate
+	Imports        *Imports          // Import declarations in the file; map of shortname to full package import name
+	Declarations   map[string]string // The DI declarations
+	Required       map[string]string
+	Optional       map[string]string
+	Instantiations []string
+}
+
+// Creates a function called funcName within a file called fileName, within the provided module.  Returns a
+// [NamespaceBuilderImpl] that can be used to accumulate instantiation code.
+//
+// The typical usage of this is by plugins such as the [goproc] plugin that accumulate
+// golang nodes and generate code to run those nodes.
+//
+// After calling this method, the returned [NamespaceBuilderImpl] can be passed to golang nodes,
+// to accumulate the instantiation code for those nodes.
+//
+// After all instantiations have been accumulated, the caller should invoke [Build], which will actually
+// generate the file fileName, combining all provided node instantiation code snippets.
+func NewNamespaceBuilder(module golang.ModuleBuilder, name, fileName, packagePath, funcName string) (*NamespaceBuilderImpl, error) {
+	pkg, err := module.CreatePackage(packagePath)
+	if err != nil {
+		return nil, err
+	}
+
+	n := &NamespaceBuilderImpl{
+		module:         module,
+		Name:           name,
+		Package:        pkg,
+		FileName:       fileName,
+		FilePath:       filepath.Join(pkg.Path, fileName),
+		FuncName:       funcName,
+		Imports:        NewImports(pkg.Path),
+		Declarations:   make(map[string]string),
+		Required:       make(map[string]string),
+		Optional:       make(map[string]string),
+		Instantiations: []string{},
+	}
+
+	// Add the runtime module as a dependency, in case it hasn't already
+	runtimeModule := "github.com/blueprint-uservices/blueprint/runtime"
+	if err := golang.AddModule(module, runtimeModule); err != nil {
+		return nil, err
+	}
+
+	n.Imports.AddPackages(
+		"github.com/blueprint-uservices/blueprint/runtime/plugins/golang",
+	)
+
+	return n, nil
+}
+
+// Implements [golang.NamespaceBuilder]
+func (n *NamespaceBuilderImpl) Info() golang.NamespaceInfo {
+	return golang.NamespaceInfo{
+		Package:  n.Package,
+		FileName: n.FileName,
+		FilePath: n.FilePath,
+		FuncName: n.FuncName,
+	}
+}
+
+// Implements [golang.NamespaceBuilder]
+func (n *NamespaceBuilderImpl) Import(packageName string) string {
+	return n.Imports.AddPackage(packageName)
+}
+
+// Implements [golang.NamespaceBuilder]
+func (n *NamespaceBuilderImpl) ImportType(typeName gocode.TypeName) string {
+	return n.Imports.NameOf(typeName)
+}
+
+// Implements [golang.NamespaceBuilder]
+func (n *NamespaceBuilderImpl) Module() golang.ModuleBuilder {
+	return n.module
+}
+
+// Implements [golang.NamespaceBuilder]
+func (n *NamespaceBuilderImpl) RequiredArg(name, description string) {
+	n.Required[name] = description
+}
+
+// Implements [golang.NamespaceBuilder]
+func (n *NamespaceBuilderImpl) OptionalArg(name, description string) {
+	n.Optional[name] = description
+}
+
+// Implements [golang.NamespaceBuilder]
+func (n *NamespaceBuilderImpl) Instantiate(name string) {
+	// Check for and avoid duplicates
+	exists := slices.Contains[[]string, string](n.Instantiations, name)
+	if exists {
+		return
+	}
+	n.Instantiations = append(n.Instantiations, name)
+}
+
+// Implements [golang.NamespaceBuilder]
+func (n *NamespaceBuilderImpl) Declare(name, buildFuncSrc string) error {
+	if _, exists := n.Declarations[name]; exists {
+		return blueprint.Errorf("generated file %s encountered redeclaration of %s", n.FileName, name)
+	}
+	n.Declarations[name] = buildFuncSrc
+	return nil
+}
+
+type buildFuncConstructorArg struct {
+	Namespace *NamespaceBuilderImpl
+	Var       gocode.Variable
+	Node      ir.IRNode
+	NodeName  string
+	NodeType  gocode.TypeName
+}
+
+type buildFuncArgs struct {
+	Namespace    *NamespaceBuilderImpl
+	Name         string
+	InstanceName string
+	Constructor  *gocode.UserType
+	NodesToGet   []buildFuncConstructorArg
+	Args         []string
+}
+
+var buildFuncTemplate = `func(n *golang.Namespace) (any, error) {
+		// Auto-generated by the golang plugin gogen/namespacebuilder.go
+		{{- range $i, $arg := .NodesToGet }}
+		var {{.Var.Name}} {{.Namespace.Imports.NameOf .NodeType}}
+		if err := n.Get("{{.Node.Name}}", &{{.Var.Name}}); err != nil {
+			return nil, err
+		}
+		{{end}}
+		return {{.Namespace.Imports.NameOf .Constructor}}(n.Context() {{- range $i, $arg := .Args}}, {{$arg}}{{end}})
+	}`
+
+// Implements [golang.NamespaceBuilder]
+func (namespace *NamespaceBuilderImpl) DeclareConstructor(name string, constructor *gocode.Constructor, args []ir.IRNode) error {
+	if len(constructor.Arguments) != len(args)+1 {
+		argNames := []string{}
+		for _, arg := range args {
+			argNames = append(argNames, arg.Name())
+		}
+		return blueprint.Errorf("mismatched args for %v.  Expected: %v.  Got: (ctx, %v)", name, constructor, strings.Join(argNames, ", "))
+	}
+
+	templateArgs := buildFuncArgs{
+		Namespace:    namespace,
+		Name:         name,
+		InstanceName: ir.CleanName(name),
+		Constructor:  &gocode.UserType{Package: constructor.Package, Name: constructor.Name},
+	}
+	for i, Var := range constructor.Arguments[1:] {
+		if _, isMetadata := args[i].(ir.IRMetadata); isMetadata {
+			return blueprint.Errorf("invalid constructor argument %v; metadata nodes are not instantiable", args[i].Name())
+		}
+
+		if v, isValue := args[i].(*ir.IRValue); isValue {
+			templateArgs.Args = append(templateArgs.Args, v.String())
+			continue
+		}
+
+		arg := buildFuncConstructorArg{
+			Namespace: namespace,
+			Var:       Var,
+			Node:      args[i],
+			NodeName:  ir.CleanName(args[i].Name()),
+			NodeType:  &gocode.BasicType{Name: "string"},
+		}
+
+		if argIface, err := golang.GetGoInterface(namespace.Module(), args[i]); err == nil {
+			arg.NodeType = &argIface.UserType
+		}
+
+		templateArgs.NodesToGet = append(templateArgs.NodesToGet, arg)
+		templateArgs.Args = append(templateArgs.Args, arg.Var.Name)
+	}
+
+	code, err := ExecuteTemplate("declare"+name, buildFuncTemplate, templateArgs)
+	if err != nil {
+		return err
+	}
+
+	return namespace.Declare(name, code)
+}
+
+var diFuncTemplate = `// Package {{.Package.ShortName}} is auto-generated by gogen/namespacebuilder.go
+//
+// It provides funcs for instantiating the {{.Name}} namespace.
+//
+// To instantiate the {{.Name}} namespace, first call [{{.FuncName}}] and then either call 
+// [Build] or [BuildWithParent].
+// 
+// See [golang.NamespaceBuilder] docs for more information about the behavior of [Build]
+package {{.Package.ShortName}}
+
+{{.Imports}}
+
+// Initializes the {{.Name}} namespace by defining all of the nodes that run
+// within the namespace.
+//
+// [Build] or [BuildWithParent] must be called on the return value of this func
+// to actually build and run the nodes in the namespace.
+func {{ .FuncName }}(name string) *golang.NamespaceBuilder {
+	b := golang.NewNamespaceBuilder(name)
+	set_{{.Name}}_Args(b)
+	set_{{.Name}}_Instances(b)
+	set_{{.Name}}_Definitions(b)
+	return b
+}
+
+// {{.Name}} requires that its arguments are either:
+//  - explicitly set with [golang.NamespaceBuilder.Set]
+//  - passed on the command line (if built using [golang.NamespaceBuilder.Build])
+//  - are defined in parent (if built using [golang.NamespaceBuilder.BuildWithParent])
+//
+// The following arguments will be eagerly checked and building the namespace
+// will fail if they haven't been provided:
+{{- range $defName, $description := .Required }}
+//   {{$defName}}
+{{- end }}
+//
+// The following arguments are optional and a failure will only occur if the client
+// tries to build a node that needs the argument to be set
+{{- range $defName, $description := .Optional }}
+//   {{$defName}}
+{{- end }}
+func set_{{.Name}}_Args(b *golang.NamespaceBuilder) {
+	{{- range $defName, $description := .Required }}
+	b.Required("{{$defName}}", "{{$description}}")
+	{{- end }}
+	{{- range $defName, $description := .Optional }}
+	b.Optional("{{$defName}}", "{{$description}}")
+	{{- end }}
+}
+
+// When the {{.Name}} namespace is built it will automatically instantiate
+// the following nodes:
+{{- range $_, $defName := .Instantiations }}
+//   {{$defName}}
+{{- end }}
+func set_{{.Name}}_Instances(b *golang.NamespaceBuilder) {
+	{{- range $_, $defName := .Instantiations }}
+	b.Instantiate("{{ $defName }}")
+	{{- end }}
+}
+
+// The {{.Name}} namespace contains definitions for instantiating
+// the following nodes:
+{{- range $defName, $_ := .Declarations }}
+//   {{$defName}}
+{{- end }}
+func set_{{.Name}}_Definitions(b *golang.NamespaceBuilder) {
+	{{- range $defName, $buildFunc := .Declarations }}
+	b.Define("{{ $defName }}", {{ $buildFunc }})
+	{{ end }}
+}
+`
+
+// Build should be the last invocation, used to generate the namespace file.
+func (code *NamespaceBuilderImpl) Build() error {
+	slog.Info(fmt.Sprintf("Generating %v", filepath.Join(code.Package.PackageName, code.FileName)))
+	return ExecuteTemplateToFile("namespace_"+code.FuncName, diFuncTemplate, code, code.FilePath)
+}
+
+func (code *NamespaceBuilderImpl) ImplementsBuildContext() {}

@@ -1,0 +1,20 @@
+syntax="proto3";
+option go_package="./;grpc";
+package grpc;
+
+
+message RecommendationService_OTServerWrapperInterface_GetRecommendations_Request {
+    string require = 1;
+    double lat = 2;
+    double lon = 3;
+    string traceCtx = 4;
+}
+
+message RecommendationService_OTServerWrapperInterface_GetRecommendations_Response {
+    repeated string ret0 = 1;
+}
+
+service RecommendationService_OTServerWrapperInterface {
+    rpc GetRecommendations (RecommendationService_OTServerWrapperInterface_GetRecommendations_Request) returns (RecommendationService_OTServerWrapperInterface_GetRecommendations_Response) {}
+}
+

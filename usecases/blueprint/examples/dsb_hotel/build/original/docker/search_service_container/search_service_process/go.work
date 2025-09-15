@@ -1,0 +1,8 @@
+go 1.24.6
+
+use (
+	./runtime
+	./search_service_process
+	./workflow
+	
+)

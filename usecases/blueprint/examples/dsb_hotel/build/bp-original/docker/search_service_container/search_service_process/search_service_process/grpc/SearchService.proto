@@ -1,0 +1,21 @@
+syntax="proto3";
+option go_package="./;grpc";
+package grpc;
+
+
+message SearchService_OTServerWrapperInterface_Nearby_Request {
+    double lat = 1;
+    double lon = 2;
+    string inDate = 3;
+    string outDate = 4;
+    string traceCtx = 5;
+}
+
+message SearchService_OTServerWrapperInterface_Nearby_Response {
+    repeated string ret0 = 1;
+}
+
+service SearchService_OTServerWrapperInterface {
+    rpc Nearby (SearchService_OTServerWrapperInterface_Nearby_Request) returns (SearchService_OTServerWrapperInterface_Nearby_Response) {}
+}
+
