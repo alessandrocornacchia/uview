@@ -279,7 +279,7 @@ class MicroView(MicroViewBase):
         """
         try:
             # dump pid to file
-            with open("/tmp/microview_nic.pid", "w") as f:
+            with open(".microview_nic.pid", "w") as f:
                 f.write(str(self.pid))
             logger.info(f"MicroView collector PID: {self.pid}")
 
