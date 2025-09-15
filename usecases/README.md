@@ -123,7 +123,9 @@ Note that `dsbhotel-long` is a configuration available under `usecases/experimen
 ### ⚠️ Important
 
 For the Kubernetes setup, the reviewers should use separate namespaces to avoid interferences. 
-This is yet to be reflected in the `orchestrator.py` script, so please manually check that no other reviewers are using the same namespace. Because at the end of the experiment our orchesrator will delete resources in the namespace, you can just check if the namespace is empty before starting the experiment with the command:
+This is yet to be reflected in the `orchestrator.py` script, and currently there is only a single namespace for everyone. Please manually check that no other reviewers are running experiment before starting your own. 
+
+This is tedious but quite simple. Because at the end of the experiment our orchesrator should delete all resources in the namespace, you can just check if the namespace is empty to verify that no one else is running the experiment:
 
 ```bash
 kubectl get pods -n online-boutique
