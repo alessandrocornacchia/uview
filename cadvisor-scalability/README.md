@@ -41,7 +41,7 @@ We suggest attaching a VSCode instance with remote SSH and install the [Jupyter 
 This is a performance critical experiment, the reviewers are expected to avoid mutual interferences while reproducing the experiment. 
 We propose three options:
 
-* **Different nodes**. Each reviewer runs the experiment on a different node, with the following assignment: `aec-nsdi-1@mcnode17`, `aec-nsdi-1@mcnode18`, `aec-nsdi-1@mcnode19`.
+* **Different nodes**. Each reviewer runs the experiment on a different node, with the following assignment: `aec-nsdi-1@mcnode17`, `aec-nsdi-2@mcnode18`, `aec-nsdi-3@mcnode19`.
 Avoid `mcnode28` as it is used for other artifacts. 
 * **Different testbed**. Reviewers are also free to use their own testbed. We expect the general trends to hold, however, the absolute values may vary depending on the hardware.
 * **Time-sharing**. If reviewers need to share the same node, we suggest to run the experiment at different times of the day with manual LOCK/UNLOCK on HotCRP platform.
