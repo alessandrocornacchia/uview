@@ -165,18 +165,34 @@ Please refer to the two sections individually for further instructions about the
 
 ### 🛠️ Manual Install (Fallback)
 
-**Install Dependencies**:
+Install system dependencies:
 ```bash
 # System packages
 sudo apt-get update
 sudo apt-get install -y python3 python3-pip wrk git ibverbs-utils rdma-core libibverbs-dev
+```
 
+Make sure `conda` or `mamba` is installed:
+```bash
 # Python environment
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-bash Miniconda3-latest-Linux-x86_64.sh
-conda create --name uview python=3.11
-conda activate uview
-pip install -r requirements.txt
+wget "https://repo.anaconda.com/miniconda/Miniforge3-$(uname)-$(uname -m).sh"
+bash bash Miniforge3-$(uname)-$(uname -m).sh
+```
+
+Clone repo and setup environment:
+```bash
+git clone 
+cd ./uview
+mamba env create -f mamba-env.yml
+mamba activate uview
+```
+
+We found issues with some requirements in certain environments (for example `pyverbs` on the Bluefield2) while compiling the Python wheels. 
+
+In our case, this was solved by installing `pyverbs` manually at the very end:
+
+```bash
+pip install  --verbose --no-cache-dir pyverbs==56.0rc5
 ```
 
 ### 🚨 Connection Issues
