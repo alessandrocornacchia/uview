@@ -21,8 +21,7 @@ Specifically, at line 127 of `run.py`:
 
 ## Prerequisites
 
-To deploy containers, `docker` and `docker compose` are required.
-Check if they are installed by running:
+Check if 'docker` is installed and if you have the permissions:
 ```bash
 docker --version
 docker compose version
@@ -36,17 +35,25 @@ You can plot the data either using the Jupyter notebook `plot.ipynb` or directly
 
 We suggest attaching a VSCode instance with remote SSH and install the [Jupyter extension](https://code.visualstudio.com/docs/datascience/jupyter-notebooks) if you decide to run the notebook version
 
-## Re-run (~ 1h)
+## Re-run experiment (~ 2h)
 
-To fully reproduce the experiments and collect new measurements you need to run 
+### ⚠️ Important
+This is a performance critical experiment, the reviewers are expected to avoid mutual interferences while reproducing the experiment. 
+We propose three options:
+
+* **Different nodes**. Each reviewer runs the experiment on a different node, with the following assignment: `aec-nsdi-1@mcnode17`, `aec-nsdi-1@mcnode18`, `aec-nsdi-1@mcnode19`.
+Avoid `mcnode28` as it is used for other artifacts. 
+* **Different testbed**. Reviewers are also free to use their own testbed. We expect the general trends to hold, however, the absolute values may vary depending on the hardware.
+* **Time-sharing**. If reviewers need to share the same node, we suggest to run the experiment at different times of the day with manual LOCK/UNLOCK on HotCRP platform.
+
+If you had started containers within a docker compose file before the experiment, flash a `docker compose down`. To kill other running docker containers `docker kill $(docker ps -q)`.
+
+### Steps
+To reproduce the experiment and collect your own measurements, simply run:
 ```
 python run.py
 ``` 
 
 This will reproduce all scenarios of the figure. 
-
-**NOTE** : To avoid biasing gthe measurements, ensure you are not running other workloads (e.g., other containers) on the machine. 
-If you had started containers within a docker compose file before the experiment, flash a `docker compose down`. To kill other running docker containers `docker kill $(docker ps -q)`.
-
 Should you change the parameters, you directly edit the relevant variables in `run.py`.
 

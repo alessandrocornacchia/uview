@@ -163,7 +163,14 @@ Please refer to the two sections individually for further instructions about the
 
 ## 🔧 Troubleshooting
 
+To ease the setup, the current `conda` environment is pre-configured and shared across users. If any issue occurs, or should you need to test install from bare-metal, refer to below guide.
+
 ### 🛠️ Manual Install (Fallback)
+
+These steps should be run on both the **host** and the **SmartNIC** (BlueField2):
+- host: `mcnode28`
+- SmartNIC: `mcbf28` (ssh via `mcnode28`)
+
 
 Install system dependencies:
 ```bash
