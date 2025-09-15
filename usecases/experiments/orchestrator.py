@@ -17,14 +17,14 @@ parser.add_argument("--chaos", action='store_true', help="Start the anomaly inje
 
 args = parser.parse_args()
 
-dotenv_path = args.exp_id + '/.env'
+dotenv_path = Path(f'./configs/{args.config}/.env')
 
 # looks for .env file in the current directory and loads it
-if not os.path.exists(dotenv_path):
-    print(f"❌ Error: .env file not found at {dotenv_path}. Make sure your experiment directory {args.exp_id} exists and contains .env file.")
+if not dotenv_path.exists():
+    print(f"❌ Error: .env file not found at {dotenv_path}. Make sure your experiment directory exists and contains .env file.")
     sys.exit(1)
 else:
-    load_dotenv(dotenv_path)
+    load_dotenv(str(dotenv_path))
 
 
 # ---- here we load environment variables ------
@@ -63,9 +63,12 @@ def main(config):
     # Get configuration profile chosen by the user
     profile_path = Path(f"{dataset_dir}/configs/{profile}")
     if not profile_path.exists():
-        print(f"Profile {profile} not found in {profile_path}")
+        print(f"Configuration {profile} not found in {profile_path}")
         sys.exit(1)
 
+    # copy .env file to the experiment directory for later reference
+    os.system(f"cp {dotenv_path} {experiment_path}/.env")
+    
     # copy confiuration files for load generation and chaos engineering to the experiment directory for later reference
     if config.loadgen:
         os.system(f"cp {profile_path}/{app}.json {experiment_path}")

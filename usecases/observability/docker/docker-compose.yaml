@@ -4,10 +4,7 @@ name: monitoring
 services:
   cadvisor:
     image: gcr.io/cadvisor/cadvisor
-    # networks:
-    #   - monitoring
     hostname: cadvisor
-#    platform: linux/aarch64
     volumes:
       - "/:/rootfs:ro"
       - "/var/run:/var/run:ro"
@@ -19,21 +16,25 @@ services:
     command: -housekeeping_interval=${HOUSEKEEPING_INTERVAL?30s}
   
   prometheus:
-    image: prom/prometheus
-    # networks:
-    #   - monitoring
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-    command: [ 
-      "--config.file=/etc/prometheus/prometheus.yml",
-      "--storage.tsdb.path=/prometheus",
-      "--web.console.libraries=/etc/prometheus/console_libraries",
-      "--web.console.templates=/etc/prometheus/consoles",
-      "--storage.tsdb.retention.time=14d",
-      "--storage.tsdb.retention.size=100GB" 
-    ]
+    # build from here to ensure the prometheus.yml is copied correctly (some issues with volume mounting otherwise)
+    build: .
+    
+    # image: prom/prometheus
+    # volumes:
+    #   - type: bind
+    #     source: ./prometheus.yml
+    #     target: /etc/prometheus/prometheus.yml
+    #     read_only: true
+    # ports:
+    #   - "9090:9090"
+    # command: [ 
+    #   "--config.file=/etc/prometheus/prometheus.yml",
+    #   "--storage.tsdb.path=/prometheus",
+    #   "--web.console.libraries=/etc/prometheus/console_libraries",
+    #   "--web.console.templates=/etc/prometheus/consoles",
+    #   "--storage.tsdb.retention.time=14d",
+    #   "--storage.tsdb.retention.size=100GB" 
+    # ]
   
 networks:
   # monitoring:

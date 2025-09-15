@@ -38,17 +38,17 @@ We use two nodes for these experiments, with the following roles:
 Deploy and run a short experiment to test everything is in order:
 
 ```bash
-ssh aec-nsdi26-node17
+ssh mcnode17
 conda activate uview
 cd ~/uview/usecases/experiments
-python orchestrator.py -c quick-test -e DSBHotel-quick --chaos --loadgen
+python orchestrator.py -c dsbhotel-test -e DSBHotel-quick --chaos --loadgen
 ```
 
 Experiments are automated with `orchestrator.py`. Two parameters are required:
 - `-c` : configuration to use, among those defined in `experiments/configs/`
 - `-e` : experiment name, used to store experiments artifacts under `usecases/experiments/<name>`
 
-In the example above, `quick-test` is a minimal configuration that runs a short test and will create a folder `usecases/experiments/DSBHotel-quick`.
+In the example above, `dsbhotel-test` is a minimal configuration that runs a short test and will create a folder `usecases/experiments/DSBHotel-quick`.
 
 If successful, after a couple of seconds, expected output is similar to:
 ```
@@ -103,14 +103,14 @@ To detach from the session, press `Ctrl+b` followed by `d`.
 
 ```
 ```bash
-ssh aec-nsdi26-node17
+ssh mcnode17
 tmux attach -t uview
 conda activate uview
 cd ~/uview/usecases/experiments
-python orchestrator.py -c long-run -e DSBHotel --chaos --loadgen
+python orchestrator.py -c dsbhotel-long -e DSBHotel --chaos --loadgen
 ```
 
-Note that `long-run` is a configuration available under `usecases/experiments/configs/` that runs a 1-hour experiment with multiple anomalies injected.
+Note that `dsbhotel-long` is a configuration available under `usecases/experiments/configs/` that runs a 1-hour experiment with multiple anomalies injected.
 
 ## 2) Kubernetes setup
 
@@ -129,10 +129,10 @@ The process is similar to the Docker Compose setup, with the difference that the
 #### Run a quick test
 
 ```bash
-ssh aec-nsdi26-node17
+ssh mcnode17
 conda activate uview
 cd ~/uview/usecases/experiments
-python orchestrator.py -c kube-quick-test -e online-boutique --chaos
+python orchestrator.py -c online-boutique-test -e online-boutique --chaos
 ```
 
 Notice that the `--loadgen` flag is not needed here because the orchestrator will not need to ssh into another node to start the load generator.
@@ -140,10 +140,10 @@ Notice that the `--loadgen` flag is not needed here because the orchestrator wil
 #### Reproduce longer workload
 
 ```bash
-ssh aec-nsdi26-node17
+ssh mcnode17
 conda activate uview
 cd ~/uview/usecases/experiments
-python orchestrator.py -c kube-long-run -e online-boutique --chaos
+python orchestrator.py -c online-boutique-long -e online-boutique --chaos
 ```
 
 
@@ -153,16 +153,14 @@ We tried to automate the Kubernetes setup by patching the `orchestrator.py` scri
 ## Run MicroView analysis pipeline
 After the workload finished, it's time to run MicroView to analyze the results.
 
-First, verify that you can collect observability data, and run the sketch. 
-
-**NOTE** If yo do not want to wait for long, you can run the analysis on a smaller dataset derived from the [kick-the-tyres](#kick-the-tyres-run-3-minutes) run above.
+**Sanity check** You can first run the analysis on a smaller dataset derived from the [kick-the-tyres](#kick-the-tyres-run-3-minutes) run above. This verifies that you can collect observability data, and run the sketch.
 
 ```bash
 cd ~/uview/usecases/postprocessing
 ./run-uview.sh all DSBHotel-quick
 ```
 
-This will collect traces, metrics, and logs from the deployed microservices application and store them in the `usecases/experiments/DSBHotel-quick` directory. 
+The script ill collect traces, metrics, and logs from the deployed microservices application and store them in the `usecases/experiments/DSBHotel-quick` directory. 
 
 #### Generated artifacts 
 
@@ -180,4 +178,9 @@ In particular, verify that the following are created:
 - `traces/*frontend*_sketch_sampled.csv.gz` : sampled traces using MicroView's sketching algorithm
 - `metrics/best_config.csv` : metrics classification based on FD-Sketch with optimized per-service hyperparameters
 
+Now you can run the full MicroView analysis pipeline on the full dataset.
 
+```bash
+cd ~/uview/usecases/postprocessing
+./run-uview.sh all DSBHotel
+```
