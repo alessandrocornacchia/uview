@@ -18,11 +18,6 @@ scraping_intervals = ['1s', '10s', '1m']
 container_replicas = [1, 10, 100, 1000]
 
 
-housekeeping_intervals = ['30s']
-scraping_intervals = ['1m']
-container_replicas = [1]
-
-
 metrics = {
     "cpu_sys": 'container_cpu_system_seconds_total', 
     "cpu_user": 'container_cpu_user_seconds_total', 
@@ -146,7 +141,7 @@ def get_resource_usage(h, s, c):
     # write to file
     if not os.path.exists(f"{script_dir}/data"):
         os.makedirs(f"{script_dir}/data")
-        
+
     with open(f"{script_dir}/data/housekeeping{h}_scraping{s}_replicas{c}.csv", 'w') as f:
         f.write("time,{}\n".format(','.join(metrics.keys())))
         
