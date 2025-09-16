@@ -1,5 +1,5 @@
 # Use the official GCC image from Docker Hub
-FROM gcc:latest
+FROM gcc:14.2.0-bookworm
 
 COPY [ "./", "/anomaly" ]
 WORKDIR /anomaly
@@ -16,8 +16,7 @@ RUN apt-get update && apt-get -y install \
     libssl-dev \
     libpq-dev \
     iproute2\
-    stress-ng\
-    sleep
+    stress-ng
 
 # make FIRM injectors
 RUN make
