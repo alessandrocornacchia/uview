@@ -71,7 +71,25 @@ def main(config):
     
     # copy confiuration files for load generation and chaos engineering to the experiment directory for later reference
     if config.loadgen:
+        
+        # check if mcnodeX is in the file
+        if 'mcnodeX' not in Path(f"{profile_path.absolute()}/{app}.json").read_text():
+            print(f"Error: mcnodeX placeholder not found in {app}.json: make sure the configuration file contains mcnodeX as the target url.")
+            sys.exit(1)
+
+        # copy to artifact folder
         os.system(f"cp {profile_path}/{app}.json {experiment_path}")
+
+        # replace mcnodeX with the actual node IP address
+        out = subprocess.run("ip a | grep 172.18 | awk '{print $2}' | cut -d'/' -f1", 
+                       shell=True, capture_output=True, text=True)
+        node_ip = out.stdout.strip()
+        print(f"Using node IP address {node_ip} as target for load generator")
+
+        file = Path(f"{experiment_path}/{app}.json")
+        file.write_text(file.read_text().replace('mcnodeX', node_ip))
+
+
     if config.chaos:
         os.system(f"cp {profile_path}/injector.yaml {experiment_path}")
 
@@ -86,7 +104,7 @@ def main(config):
         # Run the load generator on the desired node
         print(f"Starting workload generator on {loadgen_host}")
 
-        loadgen_cmd = f'./wrk_http -config={profile_path.absolute()}/{app}.json ' \
+        loadgen_cmd = f'./wrk_http -config={experiment_path}/{app}.json ' \
                     f'-outfile="{experiment_path}/traces/latency.csv" &> {experiment_path}/loadgen.log &'
 
 

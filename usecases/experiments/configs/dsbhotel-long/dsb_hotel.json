@@ -1,0 +1,34 @@
+	{
+		"num_threads": 10,
+		"num_reqs": 1000,
+		"tput": 10,
+		"url": "http://mcnodeX:12345",
+		"duration": "40m",
+		
+		"apis" : [
+			{
+				"name": "SearchHandler",
+				"proportion": 60,
+				"arg_gen_func_name": "hotel_SearchHandler",
+				"type": "GET"
+			},
+			{
+				"name": "UserHandler",
+				"proportion": 5,
+				"arg_gen_func_name": "hotel_UserHandler",
+				"type": "GET"
+			},
+			{
+				"name": "RecommendHandler",
+				"proportion": 30,
+				"arg_gen_func_name": "hotel_RecommendHandler",
+				"type": "GET"
+			},
+			{
+				"name": "ReservationHandler",
+				"proportion": 5,
+				"arg_gen_func_name": "hotel_ReservationHandler",
+				"type": "GET"
+			}
+		]
+	}

@@ -11,9 +11,17 @@ import itertools
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
 
+experiment_duration = '5m'
+
 housekeeping_intervals = ['1s', '10s', '1m']
 scraping_intervals = ['1s', '10s', '1m']
 container_replicas = [1, 10, 100, 1000]
+
+
+housekeeping_intervals = ['30s']
+scraping_intervals = ['1m']
+container_replicas = [1]
+
 
 metrics = {
     "cpu_sys": 'container_cpu_system_seconds_total', 
@@ -22,8 +30,6 @@ metrics = {
     "net": 'container_network_transmit_bytes_total'
 }
 
-experiment_duration = '5m'
-container_replicas = [1000]
 
 # these can have more complex logic for kube, docker, etc.
 def start_containers_cmd(sudo=False):
@@ -41,7 +47,7 @@ def stop_containers_cmd(sudo=False):
 
 def tear_up():
     # start monitoring containers with force-recreate option
-    r1 = os.system(f"sudo HOUSEKEEPING_INTERVAL={h} " 
+    r1 = os.system(f"HOUSEKEEPING_INTERVAL={h} " 
                   + start_containers_cmd() 
                   + " --force-recreate cadvisor prometheus")
     
@@ -138,6 +144,9 @@ def get_resource_usage(h, s, c):
         measurments[metric] = v
         
     # write to file
+    if not os.path.exists(f"{script_dir}/data"):
+        os.makedirs(f"{script_dir}/data")
+        
     with open(f"{script_dir}/data/housekeeping{h}_scraping{s}_replicas{c}.csv", 'w') as f:
         f.write("time,{}\n".format(','.join(metrics.keys())))
         

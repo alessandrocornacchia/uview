@@ -37,7 +37,11 @@ We use two nodes for these experiments:
 - `mcnodeX` : microservice application (see above for node assignment)
 - `mcnode20` : workload generator
 
-**Note** The workload generator node is fixed to `mcnode20` and managed automatically by an `orchestrator.py` script. Please do not change this.
+**Note** The workload generator node is fixed to `mcnode20` and managed automatically by an `orchestrator.py` script. 
+The configuration files `dsb_hotel.json` will be automatically modified by the `orchestrator.py` script to replace `mcnodeX` with the actual IP address of the node where the microservices application is deployed. 
+
+Do not replace `mcnodeX` manually.
+
 
 ### Kick-the-tyres run (~3 minutes)
 

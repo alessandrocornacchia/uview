@@ -5,6 +5,10 @@ bin/**
 .conda**
 *.pickle
 *.json
+
+# do not ignore config files
+!usecases/**/configs/**/*.json
+
 __pycache__/**
 *.pyc
 *.log
