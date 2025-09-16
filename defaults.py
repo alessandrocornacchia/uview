@@ -26,7 +26,7 @@ def get_env(name, default, convert=lambda x: x):
 DEFAULT_PAGE_SIZE = get_env("DEFAULT_PAGE_SIZE", 4096, int)
 DEFAULT_RDMA_MR_SIZE = get_env("DEFAULT_RDMA_MR_SIZE", 1 * DEFAULT_PAGE_SIZE, int)  # 64KB maximum size for RDMA read groups
 SHM_POOL_SIZE = get_env("SHM_POOL_SIZE", 10 * DEFAULT_RDMA_MR_SIZE, int)   # 10 MR
-SHM_POOL_NAME = "microview"
+SHM_POOL_NAME = get_env("SHM_POOL_NAME", "microview", str)
 IPU_HOSTNAME_PREFIX = get_env("IPU_HOSTNAME_PREFIX", "mcbf", str)
 
 # ---- RDMA settings ----

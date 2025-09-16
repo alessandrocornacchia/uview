@@ -177,6 +177,7 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     parser.add_argument("--num-metrics", "-m", type=int, default=2, help="Number of metrics to create")
     parser.add_argument("--update-metrics", action="store_true", help="Update metrics every 10 seconds")
+    parser.add_argument("--port", type=int, default=5000, help="API port")
 
 
     args = parser.parse_args()
@@ -186,7 +187,7 @@ if __name__ == "__main__":
         logger.debug("Debug logging enabled")
 
     # Create a MicroView client, with unique name hasing the current nanosecond timestamp 
-    client = MicroViewClient("example-service-" + str(hash(time.time_ns())))
+    client = MicroViewClient("example-service-" + str(hash(time.time_ns())), port=args.port)
     
     try:
         
