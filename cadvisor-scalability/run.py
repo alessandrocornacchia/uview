@@ -47,13 +47,13 @@ def tear_up():
     
     # start replicas containers (can keep old containers if already present
     # to speed-up. i.e. don't use --force-recreate)
-    r2 = os.system(start_containers_cmd(sudo=True) + " redis")
+    r2 = os.system(start_containers_cmd() + " redis")
     return r1+r2
 
 
 
 def tear_down():
-    return os.system(stop_containers_cmd(sudo=True))
+    return os.system(stop_containers_cmd())
 
 
 def deploy(h, s, c):
@@ -106,7 +106,7 @@ def get_resource_usage(h, s, c):
     except Exception as e:
         print("== Error connecting to prometheus")
         print(e)
-        os.system(stop_containers_cmd(sudo=True))
+        os.system(stop_containers_cmd())
         exit(1)
 
     start_time = parse_datetime(experiment_duration)
@@ -164,7 +164,7 @@ for c in container_replicas:
 
             if r != 0:
                 print("== Error starting docker compose, skipping this experiment")
-                os.system(stop_containers_cmd(sudo=True))
+                os.system(stop_containers_cmd())
                 continue
 
             print(f"== Experiment started. Sleeping for {experiment_duration}")

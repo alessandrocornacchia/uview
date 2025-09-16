@@ -16,8 +16,8 @@ services:
     ports:
     - 9090:9090
     volumes:
-    - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    - /home/temp/aec-nsdi-2/uview/cadvisor-scalability/prometheus.yml:/etc/prometheus/prometheus.yml
   redis:
     deploy:
-      replicas: 1000
+      replicas: 1
     image: redis
