@@ -66,8 +66,25 @@ def main(config):
         print(f"Configuration {profile} not found in {profile_path}")
         sys.exit(1)
 
+    
+    # detect on which node the docker compose app is running
+    out = subprocess.run("ip a | grep 172.18 | awk '{print $2}' | cut -d'/' -f1", 
+                    shell=True, capture_output=True, text=True)
+    node_ip = out.stdout.strip()
+    print(f"App running on node with IP address {node_ip}")
+    
+    # check if mcnodeX is in the file
+    if '$mcnodeX' not in Path(f"{dotenv_path.absolute()}").read_text():
+        print(f"Error: mcnodeX placeholder not found in .env. Make sure the configuration file contains mcnodeX as the target url.")
+        sys.exit(1)
+
     # copy .env file to the experiment directory for later reference
     os.system(f"cp {dotenv_path} {experiment_path}/.env")
+
+    # replace mcnodeX placeholder
+    file = Path(f"{experiment_path}/.env")
+    file.write_text(file.read_text().replace('$mcnodeX', node_ip))
+
     
     # copy confiuration files for load generation and chaos engineering to the experiment directory for later reference
     if config.loadgen:
@@ -80,12 +97,7 @@ def main(config):
         # copy to artifact folder
         os.system(f"cp {profile_path}/{app}.json {experiment_path}")
 
-        # replace mcnodeX with the actual node IP address
-        out = subprocess.run("ip a | grep 172.18 | awk '{print $2}' | cut -d'/' -f1", 
-                       shell=True, capture_output=True, text=True)
-        node_ip = out.stdout.strip()
-        print(f"Using node IP address {node_ip} as target for load generator")
-
+        # replace mcnodeX with the actual IP address of the node where the app is running
         file = Path(f"{experiment_path}/{app}.json")
         file.write_text(file.read_text().replace('mcnodeX', node_ip))
 

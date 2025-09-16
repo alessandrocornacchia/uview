@@ -179,14 +179,34 @@ We tried to automate the Kubernetes setup by patching the `orchestrator.py` scri
 ## Run MicroView analysis pipeline
 After the workload finished, it's time to run MicroView to analyze the results.
 
-**Sanity check** You can first run the analysis on a smaller dataset derived from the [kick-the-tyres](#kick-the-tyres-run-3-minutes) run above. This verifies that you can collect observability data, and run the sketch.
+
+### Sanity check
+
+To run MicroView analysis, one needs to specify where Prometheus and Jaeger are running to collect observability data.
+
+Because for Docker compose apps each reviewer is running the experiment on a different node, we parametrized the `.env` files under `configs/<config name>/.env` and replace `$mcnodeX` with the actual node where the microservices application is deployed at runtime (this is not an issue for the Kubernetes setup).
+
+Do not change `$mcnodeX` in the `.env` files  manually.
+
+Try first to run the analysis on a smaller dataset derived from the [kick-the-tyres](#kick-the-tyres-run-3-minutes) run above. This verifies that you can collect observability data, and run the sketch.
 
 ```bash
 cd ~/uview/usecases/postprocessing
 ./run-uview.sh all DSBHotel-quick
 ```
 
+
 The script ill collect traces, metrics, and logs from the deployed microservices application and store them in the `usecases/experiments/DSBHotel-quick` directory. 
+
+The compiled `.env` file is copied to the experiment directory for later reference.
+For instance, if you deployed the microservices application on `mcnode17`, you should have the two variables in `usecases/experiments/DSBHotel-quick` after the run. 
+
+```bash
+PROMETHEUS="mcnode17:9090"
+JAEGER="mcnode17:12349"
+ ```
+
+Similarly for other nodes.
 
 #### Generated artifacts 
 
@@ -204,6 +224,7 @@ In particular, verify that the following are created:
 - `traces/*frontend*_sketch_sampled.csv.gz` : sampled traces using MicroView's sketching algorithm
 - `metrics/best_config.csv` : metrics classification based on FD-Sketch with optimized per-service hyperparameters
 
+### Full analysis
 Now you can run the full MicroView analysis pipeline on the full dataset.
 
 ```bash
