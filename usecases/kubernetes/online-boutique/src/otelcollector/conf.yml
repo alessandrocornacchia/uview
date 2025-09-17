@@ -1,0 +1,28 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+
+processors:
+  probabilistic_sampler:
+    hash_seed: 1000
+    sampling_percentage: 0.1
+
+exporters:
+  otlp:
+    endpoint: "http://jaeger-collector.istio-system:4317"
+    protocol: "grpc"
+  #jaeger:
+  #  endpoint: "jaeger:14250"
+  #  tls:
+  #    insecure: true
+  #logging:
+  #  loglevel: debug
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [probabilistic_sampler]
+      exporters: [otlp] # was logging,jaeger  

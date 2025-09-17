@@ -1,0 +1,126 @@
+#default:
+#nameOverride: ""
+
+repoName: acornacchia
+namespace: online-boutique
+
+# Observability components
+observability:
+  namespace: observe
+  
+  prometheus:
+    nodePort: 30090
+  
+  jaeger:
+    nodePort:
+      queryhttp: 30686  # For Jaeger UI
+      querygrpc: 30685   # For gRPC queries
+    service:
+      otelHttp: 4318  # OTEL endpoint to receive traces from OTEL collector
+
+# Microservices configuration
+appservices:
+  adService:
+
+    imageTag: v0.3.5
+
+    resources:
+      requests:
+        cpu: 300m #400
+        memory: 250Mi #360Mi
+      limits:
+        cpu: 1000m  #600 but very thread intensive
+        memory: 660Mi
+
+  cartService:
+    imageTag: v0.3.6
+    imagePullPolicy: Always
+    
+    resources:
+      requests:
+        cpu: 200m
+        memory: 128Mi
+      limits:
+        cpu: 2000m
+        memory: 256Mi
+
+  checkoutService:
+    imageTag: v0.3.5
+
+    resources:
+      requests:
+        cpu: 200m
+        memory: 64Mi
+      limits:
+        cpu: 1000m
+        memory: 128Mi
+
+  currencyService:
+    imageTag: v0.3.5
+
+    resources:
+      requests:
+        cpu: 200m #100m
+        memory: 64Mi
+      limits:
+        cpu: 800m
+        memory: 128Mi
+
+  emailService:
+    imageTag: v0.3.5
+    resources:
+      requests:
+        cpu: 200m
+        memory: 64Mi
+      limits:
+        cpu: 400m
+        memory: 128Mi
+
+  paymentService:
+    imageTag: v0.3.5
+    resources:
+      requests:
+        cpu: 100m
+        memory: 64Mi
+      limits:
+        cpu: 400m
+        memory: 128Mi
+
+  productCatalogService:
+    imageTag: v0.3.5
+    resources:
+      requests:
+        cpu: 100m
+        memory: 64Mi
+      limits:
+        cpu: 1000m
+        memory: 128Mi
+
+  recommendationService:
+    imageTag: v0.3.5
+    resources:
+      requests:
+        cpu: 200m
+        memory: 150Mi
+      limits:
+        cpu: 800m
+        memory: 450Mi
+
+  shippingService:
+    imageTag: v0.3.5
+    resources:
+      requests:
+        cpu: 100m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+
+  redis:
+    resources:
+        limits:
+          memory: 256Mi
+          cpu: 125m
+        requests:
+          cpu: 125m # 70m
+          memory: 100Mi

@@ -1,0 +1,155 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: {{ .Values.observability.namespace }}
+  labels:
+    app: jaeger
+spec:
+  selector:
+    matchLabels:
+      app: jaeger
+  template:
+    metadata:
+      labels:
+        app: jaeger
+      annotations:
+        sidecar.istio.io/inject: "false"
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "14269"
+    spec:
+      containers:
+        - name: jaeger
+          image: "docker.io/jaegertracing/all-in-one:1.35"
+          env:
+            - name: BADGER_EPHEMERAL
+              value: "false"
+            - name: SPAN_STORAGE_TYPE
+              value: "badger"
+            - name: BADGER_DIRECTORY_VALUE
+              value: "/badger/data"
+            - name: BADGER_DIRECTORY_KEY
+              value: "/badger/key"
+            - name: COLLECTOR_ZIPKIN_HOST_PORT
+              value: ":9411"
+            - name: MEMORY_MAX_TRACES
+              value: "50000"
+            - name: QUERY_BASE_PATH
+              value: /jaeger
+            - name: COLLECTOR_OTLP_ENABLED
+              value: "true"
+            - name: LOG_LEVEL
+              value: "info"
+            - name: METRICS_STORAGE_TYPE
+              value: "prometheus"
+            - name: PROMETHEUS_SERVER_URL
+              value: "http://prometheus.{{ .Values.observability.namespace }}:9090"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 14269
+            initialDelaySeconds: 240
+            periodSeconds: 30
+          readinessProbe:
+          # keep the initial delay high because it might take a while for Jaeger
+          # to read local volume.
+            httpGet:
+              path: /
+              port: 14269
+            initialDelaySeconds: 60  
+          volumeMounts:
+            - name: data
+              mountPath: /badger
+          resources:
+            requests:
+              cpu: 1000m
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: local-jaeger-pvc
+          #emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tracing
+  namespace: {{ .Values.observability.namespace }}
+  labels:
+    app: jaeger
+spec:
+  # type: ClusterIP
+  type: NodePort
+  ports:
+    - name: http-query
+      port: 80
+      protocol: TCP
+      targetPort: 16686
+      nodePort: {{ .Values.observability.jaeger.nodePort.queryhttp }}
+    # Note: Change port name if you add '--query.grpc.tls.enabled=true'
+    - name: grpc-query
+      port: 16685
+      protocol: TCP
+      targetPort: 16685
+      nodePort: {{ .Values.observability.jaeger.nodePort.querygrpc }}
+  selector:
+    app: jaeger
+---
+# Jaeger implements the Zipkin API. To support swapping out the tracing backend, we use a Service named Zipkin.
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    name: zipkin
+  name: zipkin
+  namespace: {{ .Values.observability.namespace }}
+spec:
+  ports:
+    - port: 9411
+      targetPort: 9411
+      name: http-query
+  selector:
+    app: jaeger
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-collector
+  namespace: {{ .Values.observability.namespace }}
+  labels:
+    app: jaeger
+spec:
+  type: ClusterIP
+  ports:
+  - name: jaeger-collector-http
+    port: 14268
+    targetPort: 14268
+    protocol: TCP
+  - name: jaeger-collector-grpc
+    port: 14250
+    targetPort: 14250
+    protocol: TCP
+  - name: jaeger-collector-zipkin
+    port: 9411
+    targetPort: 9411
+  - name: jaeger-collector-otel-grpc
+    port: 4317
+    targetPort: 4317
+  - name: jaeger-collector-otel-http
+    port: {{ .Values.observability.jaeger.service.otelHttp }}
+    targetPort: {{ .Values.observability.jaeger.service.otelHttp }}
+  selector:
+    app: jaeger
+---
+# persistent storage for Jaeger traces (requires openebs)
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: local-jaeger-pvc
+  namespace: {{ .Values.observability.namespace }}
+spec:
+  storageClassName: openebs-hostpath
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10G

@@ -1,0 +1,17 @@
+
+{{/*
+Configures the Horizontal Pod Autoscaler for the Online Boutique demo.
+Every component i.e., will deploy HPA component for each microservice
+*/}}
+{{- range $name, $config := .Values.appservices }}
+    {{- $config := set . "Release" $.Release }}
+    {{- $config := set . "Chart" $.Chart }}
+    {{- $config := set . "Values" $.Values }}
+    {{- $config := set . "name" ($name | lower) }}
+    
+    {{- $autoscaling := $config.autoscaling | default dict }}
+    {{- if $autoscaling }}
+    {{- include "online-boutique-demo.hpa" $config}}
+    {{- end }}
+    
+{{- end }}

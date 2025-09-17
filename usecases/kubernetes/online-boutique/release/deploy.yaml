@@ -1,0 +1,2008 @@
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/httpbin.yaml
+# Copyright Istio Authors
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+
+##################################################################################################
+# httpbin service
+##################################################################################################
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: httpbin
+  namespace: online-boutique
+---
+# Source: online-boutique-demo/templates/observability/prometheus.yaml
+# Source: prometheus/templates/server/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    component: "server"
+    app: prometheus
+    release: prometheus
+    chart: prometheus-15.9.0
+    heritage: Helm
+  name: prometheus
+  namespace: observe
+  annotations:
+    {}
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/loadgenerator-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: locust-config
+  namespace: online-boutique
+data:
+  locustfile.py: |-
+    #!/usr/bin/python
+    #
+    # Copyright 2018 Google LLC
+    #
+    # Licensed under the Apache License, Version 2.0 (the "License");
+    # you may not use this file except in compliance with the License.
+    # You may obtain a copy of the License at
+    #
+    #      http://www.apache.org/licenses/LICENSE-2.0
+    #
+    # Unless required by applicable law or agreed to in writing, software
+    # distributed under the License is distributed on an "AS IS" BASIS,
+    # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    # See the License for the specific language governing permissions and
+    # limitations under the License.
+
+    import random
+    from locust import HttpUser, TaskSet, between
+
+    from opentelemetry import trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import (BatchSpanProcessor)
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+    from opentelemetry.instrumentation.requests import RequestsInstrumentor
+    from opentelemetry.instrumentation.urllib3 import URLLib3Instrumentor
+
+    tracer_provider = TracerProvider()
+    trace.set_tracer_provider(tracer_provider)
+    tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+
+    # Instrumenting manually to avoid error with locust gevent monkey
+    RequestsInstrumentor().instrument()
+    URLLib3Instrumentor().instrument()
+
+    products = [
+        '0PUK6V6EV0',
+        '1YMWWN1N4O',
+        '2ZYFJ3GM2N',
+        '66VCHSJNUP',
+        '6E92ZMYYFZ',
+        '9SIQT8TOJO',
+        'L9ECAV7KIM',
+        'LS4PSXUNUM',
+        'OLJCESPC7Z']
+
+    def index(l):
+        l.client.get("/")
+
+    def setCurrency(l):
+        currencies = ['EUR', 'USD', 'JPY', 'CAD']
+        l.client.post("/setCurrency",
+            {'currency_code': random.choice(currencies)})
+
+    def browseProduct(l):
+        l.client.get("/product/" + random.choice(products))
+
+    def viewCart(l):
+        l.client.get("/cart")
+
+    def addToCart(l):
+        product = random.choice(products)
+        l.client.get("/product/" + product)
+        l.client.post("/cart", {
+            'product_id': product,
+            'quantity': random.choice([1,2,3,4,5,10])})
+
+    def checkout(l):
+        addToCart(l)
+        l.client.post("/cart/checkout", {
+            'email': 'someone@example.com',
+            'street_address': '1600 Amphitheatre Parkway',
+            'zip_code': '94043',
+            'city': 'Mountain View',
+            'state': 'CA',
+            'country': 'United States',
+            'credit_card_number': '4432-8015-6152-0454',
+            'credit_card_expiration_month': '1',
+            'credit_card_expiration_year': '2039',
+            'credit_card_cvv': '672',
+        })
+
+    class UserBehavior(TaskSet):
+
+        def on_start(self):
+            index(self)
+
+        tasks = {
+            #index: 1,
+            #setCurrency: 2,
+            #browseProduct: 10,
+            addToCart: 2,
+            viewCart: 3,
+            checkout: 1}
+
+    class WebsiteUser(HttpUser):
+        tasks = [UserBehavior]
+        wait_time = between(1, 10)
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/otelcollector.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: collector-config
+  namespace: online-boutique
+data:
+  collector.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+          http:
+
+      # Dummy receiver that's never used, because a pipeline is required to have one.
+      otlp/spanmetrics:
+        protocols:
+          grpc:
+            endpoint: "localhost:12345"
+            
+    processors:
+      batch:
+      spanmetrics:
+        metrics_exporter: prometheus
+
+      probabilistic_sampler:
+        hash_seed: 1000
+        sampling_percentage: 100
+      
+      filter/1:
+        spans:
+          exclude:
+            match_type: strict
+            attributes:
+            - key: "rpc.service"
+              value: "grpc.health.v1.Health"
+
+      filter/2:
+        spans:
+          exclude:
+            match_type: strict
+            span_names: 
+              - "grpc.grpc.health.v1.Health/Check"
+                    
+    exporters:
+      otlphttp:
+        endpoint: "http://jaeger-collector.observe:4318"
+
+      # Prometheus exporter to expose internal OTEL metrics.
+      prometheus:
+        endpoint: "0.0.0.0:8889"
+
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [probabilistic_sampler, filter/1, filter/2, spanmetrics, batch]
+          exporters: [otlphttp]
+
+        metrics:
+          # Added to pass validation requiring at least one receiver in a pipeline.
+          receivers: [otlp/spanmetrics]
+          # The metrics_exporter must be present in this list.
+          exporters: [prometheus]
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/redis.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-cluster-configmap
+  namespace: online-boutique
+data:
+  redis.conf: |-
+    maxmemory 1500KB
+    maxmemory-policy allkeys-lru
+    save 60 1
+---
+# Source: online-boutique-demo/templates/observability/prometheus.yaml
+# Source: prometheus/templates/server/cm.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    component: "server"
+    app: prometheus
+    release: prometheus
+    chart: prometheus-15.9.0
+    heritage: Helm
+  name: prometheus
+  namespace: observe
+data:
+  alerting_rules.yml: |
+    {}
+  alerts: |
+    {}
+  prometheus.yml: |
+    global:
+      evaluation_interval: 1m
+      scrape_interval: 1s
+      scrape_timeout: 1s
+    rule_files:
+    - /etc/config/recording_rules.yml
+    - /etc/config/alerting_rules.yml
+    - /etc/config/rules
+    - /etc/config/alerts
+    scrape_configs:
+    - job_name: prometheus
+      static_configs:
+      - targets:
+        - localhost:9090
+    
+    - bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      job_name: kubernetes-apiservers
+      kubernetes_sd_configs:
+      - role: endpoints
+      relabel_configs:
+      - action: keep
+        regex: default;kubernetes;https
+        source_labels:
+        - __meta_kubernetes_namespace
+        - __meta_kubernetes_service_name
+        - __meta_kubernetes_endpoint_port_name
+      scheme: https
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        insecure_skip_verify: true
+    - bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      job_name: kubernetes-nodes
+      kubernetes_sd_configs:
+      - role: node
+      relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - replacement: kubernetes.default.svc:443
+        target_label: __address__
+      - regex: (.+)
+        replacement: /api/v1/nodes/$1/proxy/metrics
+        source_labels:
+        - __meta_kubernetes_node_name
+        target_label: __metrics_path__
+      scheme: https
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        insecure_skip_verify: true
+    - bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      job_name: kubernetes-nodes-cadvisor
+      kubernetes_sd_configs:
+      - role: node
+      relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - replacement: kubernetes.default.svc:443
+        target_label: __address__
+      - regex: (.+)
+        replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
+        source_labels:
+        - __meta_kubernetes_node_name
+        target_label: __metrics_path__
+      scheme: https
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        insecure_skip_verify: true
+    - honor_labels: true
+      job_name: kubernetes-service-endpoints
+      kubernetes_sd_configs:
+      - role: endpoints
+      relabel_configs:
+      - action: keep
+        regex: true
+        source_labels:
+        - __meta_kubernetes_service_annotation_prometheus_io_scrape
+      - action: drop
+        regex: true
+        source_labels:
+        - __meta_kubernetes_service_annotation_prometheus_io_scrape_slow
+      - action: replace
+        regex: (https?)
+        source_labels:
+        - __meta_kubernetes_service_annotation_prometheus_io_scheme
+        target_label: __scheme__
+      - action: replace
+        regex: (.+)
+        source_labels:
+        - __meta_kubernetes_service_annotation_prometheus_io_path
+        target_label: __metrics_path__
+      - action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        source_labels:
+        - __address__
+        - __meta_kubernetes_service_annotation_prometheus_io_port
+        target_label: __address__
+      - action: labelmap
+        regex: __meta_kubernetes_service_annotation_prometheus_io_param_(.+)
+        replacement: __param_$1
+      - action: labelmap
+        regex: __meta_kubernetes_service_label_(.+)
+      - action: replace
+        source_labels:
+        - __meta_kubernetes_namespace
+        target_label: namespace
+      - action: replace
+        source_labels:
+        - __meta_kubernetes_service_name
+        target_label: service
+      - action: replace
+        source_labels:
+        - __meta_kubernetes_pod_node_name
+        target_label: node
+    - honor_labels: true
+      job_name: kubernetes-service-endpoints-slow
+      kubernetes_sd_configs:
+      - role: endpoints
+      relabel_configs:
+      - action: keep
+        regex: true
+        source_labels:
+        - __meta_kubernetes_service_annotation_prometheus_io_scrape_slow
+      - action: replace
+        regex: (https?)
+        source_labels:
+        - __meta_kubernetes_service_annotation_prometheus_io_scheme
+        target_label: __scheme__
+      - action: replace
+        regex: (.+)
+        source_labels:
+        - __meta_kubernetes_service_annotation_prometheus_io_path
+        target_label: __metrics_path__
+      - action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        source_labels:
+        - __address__
+        - __meta_kubernetes_service_annotation_prometheus_io_port
+        target_label: __address__
+      - action: labelmap
+        regex: __meta_kubernetes_service_annotation_prometheus_io_param_(.+)
+        replacement: __param_$1
+      - action: labelmap
+        regex: __meta_kubernetes_service_label_(.+)
+      - action: replace
+        source_labels:
+        - __meta_kubernetes_namespace
+        target_label: namespace
+      - action: replace
+        source_labels:
+        - __meta_kubernetes_service_name
+        target_label: service
+      - action: replace
+        source_labels:
+        - __meta_kubernetes_pod_node_name
+        target_label: node
+      scrape_interval: 5m
+      scrape_timeout: 30s
+    - honor_labels: true
+      job_name: prometheus-pushgateway
+      kubernetes_sd_configs:
+      - role: service
+      relabel_configs:
+      - action: keep
+        regex: pushgateway
+        source_labels:
+        - __meta_kubernetes_service_annotation_prometheus_io_probe
+    - honor_labels: true
+      job_name: kubernetes-services
+      kubernetes_sd_configs:
+      - role: service
+      metrics_path: /probe
+      params:
+        module:
+        - http_2xx
+      relabel_configs:
+      - action: keep
+        regex: true
+        source_labels:
+        - __meta_kubernetes_service_annotation_prometheus_io_probe
+      - source_labels:
+        - __address__
+        target_label: __param_target
+      - replacement: blackbox
+        target_label: __address__
+      - source_labels:
+        - __param_target
+        target_label: instance
+      - action: labelmap
+        regex: __meta_kubernetes_service_label_(.+)
+      - source_labels:
+        - __meta_kubernetes_namespace
+        target_label: namespace
+      - source_labels:
+        - __meta_kubernetes_service_name
+        target_label: service
+    - honor_labels: true
+      job_name: kubernetes-pods
+      kubernetes_sd_configs:
+      - role: pod
+      relabel_configs:
+      - action: keep
+        regex: true
+        source_labels:
+        - __meta_kubernetes_pod_annotation_prometheus_io_scrape
+      - action: drop
+        regex: true
+        source_labels:
+        - __meta_kubernetes_pod_annotation_prometheus_io_scrape_slow
+      - action: replace
+        regex: (https?)
+        source_labels:
+        - __meta_kubernetes_pod_annotation_prometheus_io_scheme
+        target_label: __scheme__
+      - action: replace
+        regex: (.+)
+        source_labels:
+        - __meta_kubernetes_pod_annotation_prometheus_io_path
+        target_label: __metrics_path__
+      - action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        source_labels:
+        - __address__
+        - __meta_kubernetes_pod_annotation_prometheus_io_port
+        target_label: __address__
+      - action: labelmap
+        regex: __meta_kubernetes_pod_annotation_prometheus_io_param_(.+)
+        replacement: __param_$1
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      - action: replace
+        source_labels:
+        - __meta_kubernetes_namespace
+        target_label: namespace
+      - action: replace
+        source_labels:
+        - __meta_kubernetes_pod_name
+        target_label: pod
+      - action: drop
+        regex: Pending|Succeeded|Failed|Completed
+        source_labels:
+        - __meta_kubernetes_pod_phase
+    - honor_labels: true
+      job_name: kubernetes-pods-slow
+      kubernetes_sd_configs:
+      - role: pod
+      relabel_configs:
+      - action: keep
+        regex: true
+        source_labels:
+        - __meta_kubernetes_pod_annotation_prometheus_io_scrape_slow
+      - action: replace
+        regex: (https?)
+        source_labels:
+        - __meta_kubernetes_pod_annotation_prometheus_io_scheme
+        target_label: __scheme__
+      - action: replace
+        regex: (.+)
+        source_labels:
+        - __meta_kubernetes_pod_annotation_prometheus_io_path
+        target_label: __metrics_path__
+      - action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        source_labels:
+        - __address__
+        - __meta_kubernetes_pod_annotation_prometheus_io_port
+        target_label: __address__
+      - action: labelmap
+        regex: __meta_kubernetes_pod_annotation_prometheus_io_param_(.+)
+        replacement: __param_$1
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      - action: replace
+        source_labels:
+        - __meta_kubernetes_namespace
+        target_label: namespace
+      - action: replace
+        source_labels:
+        - __meta_kubernetes_pod_name
+        target_label: pod
+      - action: drop
+        regex: Pending|Succeeded|Failed|Completed
+        source_labels:
+        - __meta_kubernetes_pod_phase
+      scrape_interval: 5m
+      scrape_timeout: 30s
+  recording_rules.yml: |
+    {}
+  rules: |
+    {}
+---
+# Source: online-boutique-demo/templates/observability/jaeger-pvc.yaml
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: local-jaeger-pvc
+  namespace: observe
+spec:
+  storageClassName: openebs-hostpath
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10G
+---
+# Source: online-boutique-demo/templates/observability/jaeger.yaml
+# persistent storage for Jaeger traces (requires openebs)
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: local-jaeger-pvc
+  namespace: observe
+spec:
+  storageClassName: openebs-hostpath
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10G
+---
+# Source: online-boutique-demo/templates/observability/prometheus.yaml
+# Source: prometheus/templates/server/clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    component: "server"
+    app: prometheus
+    release: prometheus
+    chart: prometheus-15.9.0
+    heritage: Helm
+  name: prometheus
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+      - nodes/proxy
+      - nodes/metrics
+      - services
+      - endpoints
+      - pods
+      - ingresses
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - "extensions"
+      - "networking.k8s.io"
+    resources:
+      - ingresses/status
+      - ingresses
+    verbs:
+      - get
+      - list
+      - watch
+  - nonResourceURLs:
+      - "/metrics"
+    verbs:
+      - get
+---
+# Source: online-boutique-demo/templates/observability/prometheus.yaml
+# Source: prometheus/templates/server/clusterrolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    component: "server"
+    app: prometheus
+    release: prometheus
+    chart: prometheus-15.9.0
+    heritage: Helm
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: observe
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/adservice.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: adservice
+  namespace: online-boutique
+spec:
+  type: ClusterIP
+  selector:
+    app: adservice
+  ports:
+  - name: grpc
+    port: 9555
+    targetPort: 9555
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/cartservice.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: cartservice
+  namespace: online-boutique
+spec:
+  type: ClusterIP
+  selector:
+    app: cartservice
+  ports:
+  - name: grpc
+    port: 7070
+    targetPort: 7070
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/checkoutservice.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: checkoutservice
+  namespace: online-boutique
+spec:
+  type: ClusterIP
+  selector:
+    app: checkoutservice
+  ports:
+  - name: grpc
+    port: 5050
+    targetPort: 5050
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/currencyservice.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: currencyservice
+  namespace: online-boutique
+spec:
+  type: ClusterIP
+  selector:
+    app: currencyservice
+  ports:
+  - name: grpc
+    port: 7000
+    targetPort: 7000
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/emailservice.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: emailservice
+  namespace: online-boutique
+spec:
+  type: ClusterIP
+  selector:
+    app: emailservice
+  ports:
+  - name: grpc
+    port: 5000
+    targetPort: 8080
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/frontend.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: online-boutique
+spec:
+  type: ClusterIP
+  selector:
+    app: frontend
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: frontend-external
+# spec:
+#   type: NodePort
+#   selector:
+#     app: frontend
+#   ports:
+#   - name: http
+#     port: 80
+#     targetPort: 8080
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/httpbin.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: httpbin
+  labels:
+    app: httpbin
+    service: httpbin
+spec:
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 80
+  selector:
+    app: httpbin
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/otelcollector.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: otelcollector
+  namespace: online-boutique
+spec:
+  ports:
+  - name: grpc-otlp
+    port: 4317
+    protocol: TCP
+    targetPort: 4317
+  - name: prometheus
+    port: 8889
+    targetPort: 8889
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: otelcollector
+  type: ClusterIP
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/paymentservice.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: paymentservice
+  namespace: online-boutique
+spec:
+  type: ClusterIP
+  selector:
+    app: paymentservice
+  ports:
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/productcatalogservice.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: productcatalogservice
+  namespace: online-boutique
+spec:
+  type: ClusterIP
+  selector:
+    app: productcatalogservice
+  ports:
+  - name: grpc
+    port: 3550
+    targetPort: 3550
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/recommendationservice.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: recommendationservice
+  namespace: online-boutique
+spec:
+  type: ClusterIP
+  selector:
+    app: recommendationservice
+  ports:
+  - name: grpc
+    port: 8080
+    targetPort: 8080
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/redis.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cart
+spec:
+  type: ClusterIP
+  selector:
+    app: redis-cart
+  ports:
+  - name: redis
+    port: 6379
+    targetPort: 6379
+  # - name: redis-exporter
+  #   port: 9121
+  #   targetPort: 9121
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/shippingservice.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: shippingservice
+  namespace: online-boutique
+spec:
+  type: ClusterIP
+  selector:
+    app: shippingservice
+  ports:
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+---
+# Source: online-boutique-demo/templates/observability/jaeger.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: tracing
+  namespace: observe
+  labels:
+    app: jaeger
+spec:
+  # type: ClusterIP
+  type: NodePort
+  ports:
+    - name: http-query
+      port: 80
+      protocol: TCP
+      targetPort: 16686
+      nodePort: 30686
+    # Note: Change port name if you add '--query.grpc.tls.enabled=true'
+    - name: grpc-query
+      port: 16685
+      protocol: TCP
+      targetPort: 16685
+      nodePort: 30685
+  selector:
+    app: jaeger
+---
+# Source: online-boutique-demo/templates/observability/jaeger.yaml
+# Jaeger implements the Zipkin API. To support swapping out the tracing backend, we use a Service named Zipkin.
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    name: zipkin
+  name: zipkin
+  namespace: observe
+spec:
+  ports:
+    - port: 9411
+      targetPort: 9411
+      name: http-query
+  selector:
+    app: jaeger
+---
+# Source: online-boutique-demo/templates/observability/jaeger.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-collector
+  namespace: observe
+  labels:
+    app: jaeger
+spec:
+  type: ClusterIP
+  ports:
+  - name: jaeger-collector-http
+    port: 14268
+    targetPort: 14268
+    protocol: TCP
+  - name: jaeger-collector-grpc
+    port: 14250
+    targetPort: 14250
+    protocol: TCP
+  - name: jaeger-collector-zipkin
+    port: 9411
+    targetPort: 9411
+  - name: jaeger-collector-otel-grpc
+    port: 4317
+    targetPort: 4317
+  - name: jaeger-collector-otel-http
+    port: 4318
+    targetPort: 4318
+  selector:
+    app: jaeger
+---
+# Source: online-boutique-demo/templates/observability/prometheus.yaml
+# Source: prometheus/templates/server/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    component: "server"
+    app: prometheus
+    release: prometheus
+    chart: prometheus-15.9.0
+    heritage: Helm
+  name: prometheus
+  namespace: observe
+spec:
+  type: NodePort
+  ports:
+    - name: http
+      port: 9090
+      protocol: TCP
+      targetPort: 9090
+      nodePort: 30090
+  selector:
+    component: "server"
+    app: prometheus
+    release: prometheus
+  sessionAffinity: None
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/adservice.yaml
+# Copyright 2018 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adservice
+  namespace: online-boutique
+spec:
+  selector:
+    matchLabels:
+      app: adservice
+  template:
+    metadata:
+      labels:
+        app: adservice
+    spec:
+      serviceAccountName: default
+      terminationGracePeriodSeconds: 5
+      # set node affinity to run on node not in "mcnode18" because exec format error
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "kubernetes.io/hostname"
+                operator: NotIn
+                values:
+                - mcnode18
+      containers:
+      - name: server
+        image: acornacchia/adservice:v0.3.5
+        ports:
+        - containerPort: 9555
+        env:
+        - name: PORT
+          value: "9555"
+        - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+          value: "http://otelcollector:4317"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=adservice,service.version=1.0.0"
+        resources:
+            limits:
+              cpu: 1000m
+              memory: 660Mi
+            requests:
+              cpu: 300m
+              memory: 250Mi
+          
+        readinessProbe:
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:9555"]
+        livenessProbe:
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:9555"]
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/cartservice.yaml
+# Copyright 2018 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cartservice
+  namespace: online-boutique
+spec:
+  selector:
+    matchLabels:
+      app: cartservice
+  template:
+    metadata:
+      labels:
+        app: cartservice
+    spec:
+      serviceAccountName: default
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: server
+        image: acornacchia/cartservice:v0.3.6
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 7070
+        env:
+        - name: REDIS_ADDR
+          value: "redis-cart:6379"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://otelcollector:4317"
+        - name: PRODUCT_CATALOG_SERVICE_ADDR
+          value: "http://productcatalogservice:3550"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=cartservice,service.version=1.0.0"
+        resources:
+            limits:
+              cpu: 2000m
+              memory: 256Mi
+            requests:
+              cpu: 200m
+              memory: 128Mi
+
+        readinessProbe:
+          initialDelaySeconds: 15
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:7070", "-rpc-timeout=5s"]
+        livenessProbe:
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:7070", "-rpc-timeout=5s"]
+      #nodeSelector:
+      #  kubernetes.io/hostname: mcnode19
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/checkoutservice.yaml
+# Copyright 2018 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkoutservice
+  namespace: online-boutique
+spec:
+  selector:
+    matchLabels:
+      app: checkoutservice
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/proxyCPU: "100m" # control istio proxy resource requests
+        sidecar.istio.io/proxyCPULimit: "2000m" # control istio proxy resource requests
+        sidecar.istio.io/proxyMemoryLimit: "1Gi" # control istio proxy resource requests
+        sidecar.istio.io/proxyMemory: "100Mi" # control istio proxy resource requests
+      labels:
+        app: checkoutservice
+    spec:
+      serviceAccountName: default
+      containers:
+        - name: server
+          image: acornacchia/checkoutservice:v0.3.5
+          ports:
+          - containerPort: 5050
+          readinessProbe:
+            exec:
+              command: ["/bin/grpc_health_probe", "-addr=:5050"]
+          livenessProbe:
+            exec:
+              command: ["/bin/grpc_health_probe", "-addr=:5050"]
+          env:
+          - name: PORT
+            value: "5050"
+          - name: PRODUCT_CATALOG_SERVICE_ADDR
+            value: "productcatalogservice:3550"
+          - name: SHIPPING_SERVICE_ADDR
+            value: "shippingservice:50051"
+          - name: PAYMENT_SERVICE_ADDR
+            value: "paymentservice:50051"
+          - name: EMAIL_SERVICE_ADDR
+            value: "emailservice:5000"
+          - name: CURRENCY_SERVICE_ADDR
+            value: "currencyservice:7000"
+          - name: CART_SERVICE_ADDR
+            value: "cartservice:7070"
+          - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+            value: "http://otelcollector:4317"
+          - name: OTEL_RESOURCE_ATTRIBUTES
+            value: "service.name=checkoutservice,service.version=1.0.0"
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 128Mi
+            requests:
+              cpu: 200m
+              memory: 64Mi
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/currencyservice.yaml
+# Copyright 2018 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: currencyservice
+  namespace: online-boutique
+spec:
+  selector:
+    matchLabels:
+      app: currencyservice
+  template:
+    metadata:
+      labels:
+        app: currencyservice
+      annotations:
+        sidecar.istio.io/proxyCPU: "100m" # control istio proxy resource requests
+        sidecar.istio.io/proxyCPULimit: "2000m" # control istio proxy resource requests
+        sidecar.istio.io/proxyMemoryLimit: "1Gi" # control istio proxy resource requests
+        sidecar.istio.io/proxyMemory: "100Mi" # control istio proxy resource requests
+
+    spec:
+      serviceAccountName: default
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: server
+        image: acornacchia/currencyservice:v0.3.5
+        ports:
+        - name: grpc
+          containerPort: 7000
+        env:
+        - name: PORT
+          value: "7000"
+        - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+          value: "http://otelcollector:4317"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=currencyservice,service.version=1.0.0"
+        readinessProbe:
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:7000"]
+        livenessProbe:
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:7000"]
+        resources:
+            limits:
+              cpu: 800m
+              memory: 128Mi
+            requests:
+              cpu: 200m
+              memory: 64Mi
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/emailservice.yaml
+# Copyright 2018 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: emailservice
+  namespace: online-boutique
+spec:
+  selector:
+    matchLabels:
+      app: emailservice
+  template:
+    metadata:
+      labels:
+        app: emailservice
+    spec:
+      serviceAccountName: default
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: server
+        image: acornacchia/emailservice:v0.3.5
+        ports:
+        - containerPort: 8080
+        env:
+        - name: PORT
+          value: "8080"
+        - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+          value: "http://otelcollector:4317"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=emailservice,service.version=1.0.0"
+        readinessProbe:
+          periodSeconds: 5
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:8080"]
+        livenessProbe:
+          periodSeconds: 5
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:8080"]
+        resources:
+            limits:
+              cpu: 400m
+              memory: 128Mi
+            requests:
+              cpu: 200m
+              memory: 64Mi
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/frontend.yaml
+# Copyright 2018 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: online-boutique
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+      annotations:
+        sidecar.istio.io/rewriteAppHTTPProbers: "true"
+    spec:
+      serviceAccountName: default
+      containers:
+        - name: server
+          image: acornacchia/frontend:v0.3.5
+          ports:
+          - containerPort: 8080
+          readinessProbe:
+            initialDelaySeconds: 10
+            httpGet:
+              path: "/_healthz"
+              port: 8080
+              httpHeaders:
+              - name: "Cookie"
+                value: "shop_session-id=x-readiness-probe"
+          livenessProbe:
+            initialDelaySeconds: 10
+            httpGet:
+              path: "/_healthz"
+              port: 8080
+              httpHeaders:
+              - name: "Cookie"
+                value: "shop_session-id=x-liveness-probe"
+          env:
+          - name: PORT
+            value: "8080"
+          - name: PRODUCT_CATALOG_SERVICE_ADDR
+            value: "productcatalogservice:3550"
+          - name: CURRENCY_SERVICE_ADDR
+            value: "currencyservice:7000"
+          - name: CART_SERVICE_ADDR
+            value: "cartservice:7070"
+          - name: RECOMMENDATION_SERVICE_ADDR
+            value: "recommendationservice:8080"
+          - name: SHIPPING_SERVICE_ADDR
+            value: "shippingservice:50051"
+          - name: CHECKOUT_SERVICE_ADDR
+            value: "checkoutservice:5050"
+          - name: AD_SERVICE_ADDR
+            value: "adservice:9555"
+          - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+            value: "http://otelcollector:4317"
+          - name: OTEL_RESOURCE_ATTRIBUTES
+            value: "service.name=frontend,service.version=1.0.0"
+          # # ENV_PLATFORM: One of: local, gcp, aws, azure, onprem, alibaba
+          # # When not set, defaults to "local" unless running in GKE, otherwies auto-sets to gcp 
+          # - name: ENV_PLATFORM 
+          #   value: "aws"
+          # - name: CYMBAL_BRANDING
+          #   value: "true"
+          resources:
+            requests:
+              cpu: 1000m
+              memory: 128Mi
+            limits:
+              #cpu: 2000m
+              memory: 1024Mi
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/httpbin.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: httpbin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: httpbin
+      version: v1
+  template:
+    metadata:
+      annotations:
+        proxy.istio.io/config: |
+          tracing:
+            sampling: 100
+      labels:
+        app: httpbin
+        version: v1
+      namespace: online-boutique
+    spec:
+      serviceAccountName: httpbin
+      containers:
+      - image: docker.io/kennethreitz/httpbin
+        imagePullPolicy: IfNotPresent
+        name: httpbin
+        ports:
+        - containerPort: 80
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/loadgenerator.yaml
+# Copyright 2018 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgenerator
+  namespace: online-boutique
+spec:
+  selector:
+    matchLabels:
+      app: loadgenerator
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: loadgenerator
+      annotations:
+        sidecar.istio.io/rewriteAppHTTPProbers: "true"
+    spec:
+      serviceAccountName: default
+      terminationGracePeriodSeconds: 5
+      restartPolicy: Always
+      initContainers:
+      - command:
+        - /bin/sh
+        - -exc
+        - |
+          echo "Init container pinging frontend: ${FRONTEND_ADDR}..."
+          STATUSCODE=$(wget --server-response http://${FRONTEND_ADDR} 2>&1 | awk '/^  HTTP/{print $2}')
+          if test $STATUSCODE -ne 200; then
+              echo "Error: Could not reach frontend - Status code: ${STATUSCODE}"
+              exit 1
+          fi
+        name: frontend-check
+        image: busybox:latest
+        env:
+        - name: FRONTEND_ADDR
+          value: "frontend:80"
+      containers:
+      - name: main
+        image: acornacchia/loadgenerator:v0.3.5
+        volumeMounts:
+        - mountPath: /loadgen
+          name: locust
+        env:
+        - name: FRONTEND_ADDR
+          value: "frontend:80"
+        - name: USERS
+          value: "20"
+        resources:
+          limits:
+            cpu: 300m
+            memory: 256Mi
+#          limits:
+#            cpu: 500m
+#            memory: 512Mi
+      # here we add either the base or the spike configmap
+      volumes:
+        - name: locust
+          configMap:
+            name: locust-config
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/otelcollector.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otelcollector
+  namespace: online-boutique
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otelcollector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: otelcollector
+        app: otelcollector
+      annotations:
+        prometheus.io/port: "8889"
+        prometheus.io/path: "/metrics"
+        prometheus.io/scrape_slow: "true"
+    spec:
+      initContainers:
+      - name: wait-for-jaeger
+        image: busybox:1.35
+        command: ['sh', '-c']
+        args:
+        - |
+          echo "Waiting for jaeger-collector service to be ready..."
+          until nc -z jaeger-collector.observe.svc.cluster.local 4318; do
+            echo "jaeger-collector not ready, waiting 5 seconds..."
+            sleep 5
+          done
+          echo "jaeger-collector is ready!"
+      containers:
+      - name: otelcol
+        args:
+        - --config=/conf/collector.yaml
+        image: otel/opentelemetry-collector-contrib:0.88.0 # was without -contrib
+        volumeMounts:
+        - mountPath: /conf
+          name: collector-config
+      volumes:
+      - configMap:
+          items:
+          - key: collector.yaml
+            path: collector.yaml
+          name: collector-config
+        name: collector-config
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/paymentservice.yaml
+# Copyright 2018 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paymentservice
+  namespace: online-boutique
+spec:
+  selector:
+    matchLabels:
+      app: paymentservice
+  template:
+    metadata:
+      labels:
+        app: paymentservice
+    spec:
+      serviceAccountName: default
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: server
+        image: acornacchia/paymentservice:v0.3.5
+        ports:
+        - containerPort: 50051
+        env:
+        - name: PORT
+          value: "50051"
+        - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+          value: "http://otelcollector:4317"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=paymentservice,service.version=1.0.0"
+        readinessProbe:
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:50051"]
+        livenessProbe:
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:50051"]
+        resources:
+            limits:
+              cpu: 400m
+              memory: 128Mi
+            requests:
+              cpu: 100m
+              memory: 64Mi
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/productcatalogservice.yaml
+# Copyright 2018 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: productcatalogservice
+  namespace: online-boutique
+spec:
+  selector:
+    matchLabels:
+      app: productcatalogservice
+  template:
+    metadata:
+      labels:
+        app: productcatalogservice
+    spec:
+      serviceAccountName: default
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: server
+        image: acornacchia/productcatalogservice:v0.3.5
+        ports:
+        - containerPort: 3550
+        env:
+        - name: PORT
+          value: "3550"
+        - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+          value: "http://otelcollector:4317"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=productcatalogservice,service.version=1.0.0"
+        readinessProbe:
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:3550"]
+        livenessProbe:
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:3550"]
+        resources:
+            limits:
+              cpu: 1000m
+              memory: 128Mi
+            requests:
+              cpu: 100m
+              memory: 64Mi
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/recommendationservice.yaml
+# Copyright 2018 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recommendationservice
+  namespace: online-boutique
+spec:
+  selector:
+    matchLabels:
+      app: recommendationservice
+  template:
+    metadata:
+      labels:
+        app: recommendationservice
+    spec:
+      serviceAccountName: default
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: server
+        image: "acornacchia/recommendationservice:v0.3.5"
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          periodSeconds: 5
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:8080"]
+        livenessProbe:
+          periodSeconds: 5
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:8080"]
+        env:
+        - name: PORT
+          value: "8080"
+        - name: PRODUCT_CATALOG_SERVICE_ADDR
+          value: "productcatalogservice:3550"
+        - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+          value: "http://otelcollector:4317"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=recommendationservice,service.version=1.0.0"
+        resources:
+            limits:
+              cpu: 800m
+              memory: 450Mi
+            requests:
+              cpu: 200m
+              memory: 150Mi
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/redis.yaml
+# Copyright 2018 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-cart
+  namespace: online-boutique
+spec:
+  selector:
+    matchLabels:
+      app: redis-cart
+  template:
+    metadata:
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9121"
+      labels:
+        app: redis-cart
+    spec:
+      containers:
+      - name: redis
+        image: redis:alpine
+        command: ["redis-server"]
+        args: ["/conf/redis.conf"]
+        ports:
+        - containerPort: 6379
+        readinessProbe:
+          periodSeconds: 5
+          tcpSocket:
+            port: 6379
+        livenessProbe:
+          periodSeconds: 5
+          tcpSocket:
+            port: 6379
+        volumeMounts:
+        - mountPath: /data
+          name: redis-data
+        - mountPath: /conf
+          name: redis-conf
+        resources:
+            limits:
+              cpu: 125m
+              memory: 256Mi
+            requests:
+              cpu: 125m
+              memory: 100Mi
+      - name: redis-exporter
+        image: oliver006/redis_exporter:latest
+        securityContext:
+          runAsUser: 59000
+          runAsGroup: 59000
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 200Mi
+        ports:
+        - containerPort: 9121
+      volumes:
+      - name: redis-data
+        emptyDir: {}
+      - name: redis-conf
+        configMap:
+          name: redis-cluster-configmap
+---
+# Source: online-boutique-demo/templates/kubernetes-manifests/shippingservice.yaml
+# Copyright 2018 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shippingservice
+  namespace: online-boutique
+spec:
+  selector:
+    matchLabels:
+      app: shippingservice
+  template:
+    metadata:
+      labels:
+        app: shippingservice
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: server
+        image: "acornacchia/shippingservice:v0.3.5"
+        ports:
+        - containerPort: 50051
+        env:
+        - name: PORT
+          value: "50051"
+        - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+          value: "http://otelcollector:4317"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=shippingservice,service.version=1.0.0"
+        readinessProbe:
+          periodSeconds: 5
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:50051"]
+        livenessProbe:
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:50051"]
+        resources:
+            limits:
+              cpu: 200m
+              memory: 128Mi
+            requests:
+              cpu: 100m
+              memory: 64Mi
+---
+# Source: online-boutique-demo/templates/observability/jaeger.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: observe
+  labels:
+    app: jaeger
+spec:
+  selector:
+    matchLabels:
+      app: jaeger
+  template:
+    metadata:
+      labels:
+        app: jaeger
+      annotations:
+        sidecar.istio.io/inject: "false"
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "14269"
+    spec:
+      containers:
+        - name: jaeger
+          image: "docker.io/jaegertracing/all-in-one:1.35"
+          env:
+            - name: BADGER_EPHEMERAL
+              value: "false"
+            - name: SPAN_STORAGE_TYPE
+              value: "badger"
+            - name: BADGER_DIRECTORY_VALUE
+              value: "/badger/data"
+            - name: BADGER_DIRECTORY_KEY
+              value: "/badger/key"
+            - name: COLLECTOR_ZIPKIN_HOST_PORT
+              value: ":9411"
+            - name: MEMORY_MAX_TRACES
+              value: "50000"
+            - name: QUERY_BASE_PATH
+              value: /jaeger
+            - name: COLLECTOR_OTLP_ENABLED
+              value: "true"
+            - name: LOG_LEVEL
+              value: "info"
+            - name: METRICS_STORAGE_TYPE
+              value: "prometheus"
+            - name: PROMETHEUS_SERVER_URL
+              value: "http://prometheus.observe:9090"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 14269
+            initialDelaySeconds: 240
+            periodSeconds: 30
+          readinessProbe:
+          # keep the initial delay high because it might take a while for Jaeger
+          # to read local volume.
+            httpGet:
+              path: /
+              port: 14269
+            initialDelaySeconds: 60  
+          volumeMounts:
+            - name: data
+              mountPath: /badger
+          resources:
+            requests:
+              cpu: 1000m
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: local-jaeger-pvc
+          #emptyDir: {}
+---
+# Source: online-boutique-demo/templates/observability/prometheus.yaml
+# Source: prometheus/templates/server/deploy.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    component: "server"
+    app: prometheus
+    release: prometheus
+    chart: prometheus-15.9.0
+    heritage: Helm
+  name: prometheus
+  namespace: observe
+spec:
+  selector:
+    matchLabels:
+      component: "server"
+      app: prometheus
+      release: prometheus
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        component: "server"
+        app: prometheus
+        release: prometheus
+        chart: prometheus-15.9.0
+        heritage: Helm
+        sidecar.istio.io/inject: "false"
+    spec:
+      enableServiceLinks: true
+      serviceAccountName: prometheus
+      containers:
+        - name: prometheus-server-configmap-reload
+          image: "jimmidyson/configmap-reload:v0.5.0"
+          imagePullPolicy: "IfNotPresent"
+          args:
+            - --volume-dir=/etc/config
+            - --webhook-url=http://127.0.0.1:9090/-/reload
+          resources:
+            {}
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/config
+              readOnly: true
+        - name: prometheus-server
+          image: "prom/prometheus:v2.34.0"
+          imagePullPolicy: "IfNotPresent"
+          args:
+            - --storage.tsdb.retention.time=7d
+            - --storage.tsdb.retention.size=100GB
+            - --config.file=/etc/config/prometheus.yml
+            - --storage.tsdb.path=/data
+            - --web.console.libraries=/etc/prometheus/console_libraries
+            - --web.console.templates=/etc/prometheus/consoles
+            - --web.enable-lifecycle
+          ports:
+            - containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9090
+              scheme: HTTP
+            initialDelaySeconds: 0
+            periodSeconds: 5
+            timeoutSeconds: 4
+            failureThreshold: 3
+            successThreshold: 1
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9090
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 3
+            successThreshold: 1
+          resources:
+            {}
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/config
+            - name: storage-volume
+              mountPath: /data
+              subPath: ""
+      hostNetwork: false
+      dnsPolicy: ClusterFirst
+      securityContext:
+        fsGroup: 65534
+        runAsGroup: 65534
+        runAsNonRoot: true
+        runAsUser: 65534
+      terminationGracePeriodSeconds: 300
+      volumes:
+        - name: config-volume
+          configMap:
+            name: prometheus
+        - name: storage-volume
+          emptyDir:
+            {}
