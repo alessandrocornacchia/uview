@@ -224,6 +224,17 @@ In particular, verify that the following are created:
 - `traces/*frontend*_sketch_sampled.csv.gz` : sampled traces using MicroView's sketching algorithm
 - `metrics/best_config.csv` : metrics classification based on FD-Sketch with optimized per-service hyperparameters
 
+#### Tear down the microservices application
+
+At the end of the experiment, you may want to tear down the microservices (although not necessary). 
+
+```bash
+cd ~/uview/usecases/experiments/configs/<name of the config folder>
+./tear-down.sh
+```
+
+**Note**: this will also stop the monitoring containers (Prometheus and Jaeger) and delete all collected data. Do it only at the very end of the experiments. If you decide not to tear down the application, you can still run MicroView analysis, as the data collection step will only download the data produced during the experiment.
+
 ### Full analysis
 Now you can run the full MicroView analysis pipeline on the full dataset.
 

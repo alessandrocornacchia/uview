@@ -153,13 +153,14 @@ def main(config):
 
                 sys.exit(1)
 
-    print("")
-    print("=== TEAR DOWN WORKLOAD ===")
-    cmd = f"{app_dir}/deploy-microservices.sh {app} {build_name} --down"
-    ret = os.system(cmd)
-    if ret != 0:
-        print(f"Error destorying microservice app {app}")
-        sys.exit(1)
+    # Do not tear down the app because we want to keep the observability containers up
+    # print("")
+    # print("=== TEAR DOWN WORKLOAD ===")
+    # cmd = f"{app_dir}/deploy-microservices.sh {app} {build_name} --down"
+    # ret = os.system(cmd)
+    # if ret != 0:
+    #     print(f"Error destorying microservice app {app}")
+    #     sys.exit(1)
 
 
 # execute

@@ -44,7 +44,7 @@ def parse_timeframe(start, end, duration):
 
 
 
-def stream_traces(f, out, compression=True, debug=False):
+def stream_traces(f, out, compression=True, debug=False, overwrite=False):
     """
     Stream traces from Jaeger API and write to CSV file. If debug is true, also return 
     list of traces. It implements a caching mechanism. For a given directory, it keeps
@@ -69,7 +69,7 @@ def stream_traces(f, out, compression=True, debug=False):
     row["operation"] = None
     row["processes"] = None
 
-    if os.path.exists(out):
+    if not overwrite and os.path.exists(out):
         if not click.confirm(f'File {out} already exists. Overwrite?', default = True, show_default=True):
             print(f'\r==> 0 new written traces to {out}', end='', flush=True)
             return

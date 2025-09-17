@@ -23,7 +23,7 @@ def download(args):
     print(f'Connecting to {url}...')
     source = urllib.request.urlopen(url)
     print(f'Succeed...')
-    return stream_traces(source, args['file'], compression=True, debug=args['debug'])
+    return stream_traces(source, args['file'], compression=True, debug=args['debug'], overwrite=args['yes'])
 
 def sample(args):
     head_sampling(args['file'], p=args['sampling']/100)
@@ -49,6 +49,7 @@ parser.add_argument("--directory", "-D", type=str, help="Output directory", requ
 parser.add_argument("--jaeger-endpoint", "-j", type=str, help="Jaeger endpoint", default="jaeger.172.18.0.28.nip.io:31898")
 parser.add_argument("--start", type=str, help="Start time")
 parser.add_argument("--end", type=str, help="End time")
+parser.add_argument("--yes", "-y", action='store_true', help="Automatic yes to prompts")
 
 #---------------------------
 #          program

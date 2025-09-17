@@ -14,6 +14,8 @@ set -a
 . .env
 cd -
 
+echo $EXPERIMENT_ID
+
 # shortcut to this
 # alias pyuview="conda run -n uview --live-stream python"
 

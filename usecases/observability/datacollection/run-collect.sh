@@ -5,7 +5,7 @@
 # After execution, it delivers csv files with metrics and traces and also produces sampled versions of the traces using head-based sampling.
 ############### 
 
-if [ $# -ne 1 ]; then
+if [ $# -lt 1 ]; then
     echo "Usage: $0 <experiment_id>"
     exit 1
 fi
@@ -66,7 +66,7 @@ SVC=(
 
 
 # downlaod traces and produce sampled versions
-python ./jaeger_traces.py --jaeger-endpoint "$JAEGER" --service "unknown_service:frontend_service_process" --end "$END_TIME_TZ" --start "$START_TIME_TZ" -D $TRACES_DIR download
+python ./jaeger_traces.py --jaeger-endpoint "$JAEGER" --service "unknown_service:frontend_service_process" --end "$END_TIME_TZ" --start "$START_TIME_TZ" -D $TRACES_DIR -y download
 
 echo "Sampling traces..."
 for p in $PERCENTAGE_SAMPLE ; do
@@ -100,7 +100,7 @@ for Service in "${SVC[@]}" ; do
     )
 
     # dry-run only prints
-    if [ $# -eq 1 ] && [ $1 == "--dry-run" ] ; then
+    if [ $# -eq 2 ] && [ $2 == "--dry-run" ] ; then
         echo "${CMD[@]}"
     else
     # run it
