@@ -260,7 +260,7 @@ if [[ $LOCAL_RUN -eq 1 ]]; then
   
 else
     # Create the remote script using heredoc
-    cat > "/tmp/remote_script.sh" << EOF
+    cat > ".remote_script.sh" << EOF
 cd $ROOT_DIR
 # uncomment below for development purposes to avoid copy & paste
 # git pull
@@ -286,7 +286,7 @@ EOF
     
     
     # Execute the script on the remote machine, and store the PID to kill later
-    ssh $REMOTE_HOST bash -ls < /tmp/remote_script.sh > "${LOGS_DIR}/.remote_pid.txt"
+    ssh $REMOTE_HOST bash -ls < .remote_script.sh > "${LOGS_DIR}/.remote_pid.txt"
     # store in file to kill later at sigterm
     MICROVIEW_READER_PID=$(tail -n 1 "${LOGS_DIR}/.remote_pid.txt")
     if [[ $MICROVIEW_READER_PID -eq -1 ]]; then
