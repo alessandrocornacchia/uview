@@ -140,6 +140,9 @@ Test the Prometheus-compatible endpoint:
 # On SmartNIC, restart with Prometheus mode
 python microview-nic.py \
     --control-plane 192.168.100.1:5000 \
+    --dev mlx5_3 \
+    --gid 1 \
+    --ib-port 1 \
     --test prometheus \
     --debug
 
