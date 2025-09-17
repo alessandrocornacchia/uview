@@ -5,6 +5,7 @@ import yaml
 import tempfile
 from typing import Dict, Optional
 import logging
+import time
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
@@ -148,17 +149,33 @@ class ChaosMeshStressInjector:
         """
 
         if experiment_name in self.active_experiments:
+            
+            logging.info(f"Checking status of existing experiment {experiment_name}...")
+            
             # Check if the experiment is terminated
             command = f"kubectl get {self.active_experiments[experiment_name]} {experiment_name} -n {self.namespace}" 
-            command += " -o jsonpath='{.status.experiment.containerRecords[0].events}'"
-
-            success, output = self._run_command(command)
+            
+            # first check if injectedCount is 0, meaning it has not started yet
+            command_tmp = command + " -o jsonpath='{.status.experiment.containerRecords[0].injectedCount}'"
+            
+            success, output = self._run_command(command_tmp)
+            if success:
+                injected_count = int(output.strip().replace("'", ""))
+                if injected_count == 0:
+                    logging.info(f"Experiment {experiment_name} exists but has not started yet.")
+                    return False
+            
+            # if started, check if it is terminated and succeeded
+            command_tmp = command + " -o jsonpath='{.status.experiment.containerRecords[0].events}'"
+            success, output = self._run_command(command_tmp)
 
             output = json.loads(output.replace("'", "\"")) if success else ""
             
             for event in output:
                 if event["operation"]=="Recover" and event["type"]=="Succeeded":
                     return True
+            
+        return False
         
     
     def recover_cpu_stress(self, experiment_name: Optional[str] = None, microservice: Optional[str] = None):
@@ -298,8 +315,6 @@ class ChaosMeshStressInjector:
 
 # Example usage
 if __name__ == "__main__":
-
-    import time
 
     namespace = "online-boutique"
     

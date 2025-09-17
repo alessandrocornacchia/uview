@@ -75,7 +75,7 @@ def main(config):
     
     # check if mcnodeX is in the file
     if '$mcnodeX' not in Path(f"{dotenv_path.absolute()}").read_text():
-        print(f"Error: mcnodeX placeholder not found in .env. Make sure the configuration file contains mcnodeX as the target url.")
+        print(f"Error: $mcnodeX placeholder not found in .env. Make sure the configuration file contains $mcnodeX as the target url.")
         sys.exit(1)
 
     # copy .env file to the experiment directory for later reference
@@ -85,7 +85,11 @@ def main(config):
     file = Path(f"{experiment_path}/.env")
     file.write_text(file.read_text().replace('$mcnodeX', node_ip))
 
-    
+    # copy helm values file (used only for kubernetes deployments)
+    if (profile_path / 'values.yaml').exists():
+        print(f"Copying helm values file from {profile_path}/values.yaml to {app_dir}/{app}/helm/values.yml")
+        os.system(f"cp {profile_path}/values.yaml {app_dir}/{app}/helm/values.yaml")
+
     # copy confiuration files for load generation and chaos engineering to the experiment directory for later reference
     if config.loadgen:
         
@@ -109,7 +113,7 @@ def main(config):
     cmd = f"{app_dir}/deploy-microservices.sh {app} {build_name}"
     ret = os.system(cmd)
     if ret != 0:
-        print(f"Error starting microservice app {app}")
+        print(f"❌ Error starting microservice app {app}")
         sys.exit(1)
 
     if config.loadgen:

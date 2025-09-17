@@ -34,6 +34,7 @@ EXAMPLES:
 EOF
 }
 
+#######################################################
 # Function to log messages with timestamps
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
@@ -41,7 +42,10 @@ log() {
 
 # Function to log errors
 error() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >&2
+
+    local script_name="$0"
+
+    echo "[$script_name $(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >&2
 }
 
 # Function to validate arguments
@@ -81,117 +85,9 @@ validate_arguments() {
         fi
     fi
 }
+##########################################################
 
-# Function to wait for pods to be ready
-wait_for_pods_ready() {
-    local timeout="${1:-300}"
-    
-    log "Waiting for all pods to be ready..."
-    
-    NAMESPACES=("online-boutique" "observe")
-
-    for namespace in "${NAMESPACES[@]}"; do
-        if kubectl get namespace "$namespace" >/dev/null 2>&1; then 
-            log "Waiting for pods in namespace '$namespace' to be ready..."
-            
-            if ! kubectl wait pod \
-                --all \
-                --for=condition=Ready \
-                --namespace="$namespace" \
-                --timeout="${timeout}s" 2>/dev/null; then
-                error "Timeout waiting for pods to be ready in namespace '$namespace'"
-                log "Current pod status:"
-                kubectl get pods -n "$namespace"
-                return 1
-            fi
-            
-            log "✅ All pods in namespace '$namespace' are ready and running"
-        else
-            log "Namespace '$namespace' does not exist, skipping..."
-        fi
-    done
-}
-
-# Wait for pods to be terminated in the two hardcoded namespaces
-wait_for_pods_terminated() {
-    local timeout="${1:-120}"
-    
-    NAMESPACES=("online-boutique" "observe")
-
-    for namespace in "${NAMESPACES[@]}"; do
-        if kubectl get namespace "$namespace" >/dev/null 2>&1; then 
-            log "Waiting for pods in namespace '$namespace' to be terminated..."
-            
-            while true; do
-                local pod_count=$(kubectl get pods -n "$namespace" --no-headers 2>/dev/null | wc -l)
-                
-                if [[ $pod_count -eq 0 ]]; then
-                    log "✅ All pods in namespace '$namespace' have been terminated"
-                    break
-                fi
-                
-                log "Waiting for $pod_count pods to terminate..."
-                sleep 5
-            done
-        else
-            log "Namespace '$namespace' does not exist, skipping..."
-        fi
-    done
-}
-
-# Function to check if deployment exists
-deployment_exists() {
-    local app_dir="$1"
-    [[ -f "$app_dir/release/deploy.yaml" ]]
-}
-
-# Function to tear down the application
-tear_down() {
-    local app_path="$1"
-    local release_dir="$app_path/release"
-    
-    log "🔥 Starting application tear down process..."
-    
-    # Check if deployment manifest exists
-    if [[ ! -f "$release_dir/deploy.yaml" ]]; then
-        error "Deployment manifest not found: $release_dir/deploy.yaml"
-        log "Application may not be deployed or manifest was removed"
-        exit 2
-    fi
-    
-    log "Tearing down application from Kubernetes..."
-    
-    if ! kubectl delete -f "$release_dir/deploy.yaml"; then
-        error "Failed to tear down application from Kubernetes"
-        exit 3
-    fi
-    
-    log "✅ Tear down command executed successfully"
-    
-    # Wait for application pods to be terminated
-    log "⏳ Waiting for application pods to be terminated..."
-    if ! wait_for_pods_terminated 120; then
-        error "Some application pods failed to terminate within 2 minutes"
-        exit 3
-    fi
-    
-    log "🎉 Application tear down completed successfully!"
-    
-    # Display summary
-    echo ""
-    log "=== TEAR DOWN SUMMARY ==="
-    log "Application: $APP"
-    log "Deployment Manifest: $release_dir/deploy.yaml"
-    log "Application pods: Terminated"
-    echo ""
-    log "Use 'kubectl get pods' to verify no application pods remain"
-    
-    # Show current pod status
-    echo ""
-    log "Current pod status:"
-    kubectl get pods -n online-boutique 2>/dev/null || log "No pods in online-boutique namespace"
-    kubectl get pods -n observe 2>/dev/null || log "No pods in observe namespace"
-}
+# CLI argument parsing
 
 # Check for help flag
 if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]] || [[ $# -eq 0 ]]; then
@@ -263,6 +159,142 @@ log "Using APP: $APP"
 log "Using FORCE_MAKE: $FORCE_MAKE"
 log "Using TEAR_DOWN: $TEAR_DOWN"
 
+
+
+######### Utilities functions #########
+
+# Function to get available namespaces from Helm values file
+get_namespaces_from_values() {
+    local helm_dir="$1"
+    local values_file="$helm_dir/values.yaml"
+    
+    if [[ ! -f "$values_file" ]]; then
+        error "Values file not found: $values_file"
+        return 1
+    fi
+    
+    # Extract namespace values from the YAML file
+    grep "namespace:" "$values_file" | awk '{print $2}' | sort -u
+}
+
+# Function to wait for pods to be ready
+wait_for_pods_ready() {
+    local timeout="${1:-300}"
+    
+    log "Waiting for all pods to be ready, timeout ${timeout}s..."
+    
+    NAMESPACES=($(get_namespaces_from_values "$HELM_DIR"))
+
+    for namespace in "${NAMESPACES[@]}"; do
+        if kubectl get namespace "$namespace" >/dev/null 2>&1; then 
+            log "Waiting for pods in namespace '$namespace' to be ready..."
+            
+            # Initial wait fot the pods to appear before checking
+            sleep 5 
+
+            if ! kubectl wait pod \
+                --all \
+                --for=condition=Ready \
+                --namespace="$namespace" \
+                --timeout="${timeout}s" 2>/dev/null; then
+                error "Timeout waiting for pods to be ready in namespace '$namespace'"
+                log "Current pod status:"
+                kubectl get pods -n "$namespace"
+                return 1
+            fi
+            
+            log "✅ All pods in namespace '$namespace' are ready and running"
+        else
+            log "Namespace '$namespace' does not exist, skipping..."
+        fi
+    done
+}
+
+# Wait for pods to be terminated in the two hardcoded namespaces
+wait_for_pods_terminated() {
+    local timeout="${1:-120}"
+    
+    NAMESPACES=($(get_namespaces_from_values "$HELM_DIR"))
+
+    for namespace in "${NAMESPACES[@]}"; do
+        if kubectl get namespace "$namespace" >/dev/null 2>&1; then 
+            log "Waiting for pods in namespace '$namespace' to be terminated..."
+            
+            while true; do
+                local pod_count=$(kubectl get pods -n "$namespace" --no-headers 2>/dev/null | wc -l)
+                
+                if [[ $pod_count -eq 0 ]]; then
+                    log "✅ All pods in namespace '$namespace' have been terminated"
+                    break
+                fi
+                
+                log "Waiting for $pod_count pods to terminate..."
+                sleep 5
+            done
+        else
+            log "Namespace '$namespace' does not exist, skipping..."
+        fi
+    done
+}
+
+# Function to check if deployment exists
+deployment_exists() {
+    local app_dir="$1"
+    [[ -f "$app_dir/release/deploy.yaml" ]]
+}
+
+# Function to tear down the application
+tear_down() {
+    local app_path="$1"
+    local release_dir="$app_path/release"
+    
+    log "🔥 Starting application tear down process..."
+    
+    # Check if deployment manifest exists
+    if [[ ! -f "$release_dir/deploy.yaml" ]]; then
+        error "Deployment manifest not found: $release_dir/deploy.yaml"
+        log "Application may not be deployed or manifest was removed"
+        exit 2
+    fi
+    
+    log "Tearing down application from Kubernetes..."
+    
+    if ! kubectl delete -f "$release_dir/deploy.yaml"; then
+        error "Failed to tear down application from Kubernetes"
+        exit 3
+    fi
+    
+    log "✅ Tear down command executed successfully"
+    
+    # Wait for application pods to be terminated
+    log "⏳ Waiting for application pods to be terminated..."
+    if ! wait_for_pods_terminated 120; then
+        error "Some application pods failed to terminate within 2 minutes"
+        exit 3
+    fi
+    
+    log "🎉 Application tear down completed successfully!"
+    
+    # Display summary
+    echo ""
+    log "=== TEAR DOWN SUMMARY ==="
+    log "Application: $APP"
+    log "Deployment Manifest: $release_dir/deploy.yaml"
+    log "Application pods: Terminated"
+    echo ""
+    log "Use 'kubectl get pods' to verify no application pods remain"
+    
+    # # Show current pod status
+    # echo ""
+    # log "Current pod status:"
+    # kubectl get pods -n online-boutique 2>/dev/null || log "No pods in online-boutique namespace"
+    # kubectl get pods -n observe 2>/dev/null || log "No pods in observe namespace"
+}
+
+####### End utilities functions #########
+
+
+
 # Handle tear down option
 if [[ "$TEAR_DOWN" == true ]]; then
     tear_down "$APP_PATH"
@@ -280,18 +312,19 @@ fi
 # Step 1: Generate Helm templates
 cd "$HELM_DIR"
 
-if [[ "$FORCE_MAKE" == true ]] || ! deployment_exists "$APP_PATH"; then
-    log "Generating Helm templates for $APP..."
-    
-    if ! helm template online-boutique . -f values.yaml > ../release/deploy.yaml; then
-        error "Failed to generate Helm templates"
-        exit 3
-    fi
-    
-    log "✅ Helm templates generated successfully"
-else
-    log "💿 Deployment manifest exists, skipping Helm template generation"
+# if [[ "$FORCE_MAKE" == true ]] || ! deployment_exists "$APP_PATH"; then
+log "Generating Helm templates for $APP..."
+
+if ! helm template online-boutique . -f values.yaml > ../release/deploy.yaml; then
+    error "Failed to generate Helm templates"
+    exit 3
 fi
+
+log "✅ Helm templates generated successfully"
+
+# else
+#     log "💿 Deployment manifest exists, skipping Helm template generation"
+# fi
 
 if [[ "$NO_RUN" == true ]]; then
     log "🛑 Skipping deployment (--no-run option specified)"
@@ -301,6 +334,20 @@ fi
 
 # Step 2: Deploy to Kubernetes
 log "🚀 Deploying application to Kubernetes..."
+
+# create namespaces that do not exist yet
+NAMESPACES=($(get_namespaces_from_values "$HELM_DIR"))
+for ns in "${NAMESPACES[@]}"; do
+    if ! kubectl get namespace "$ns" >/dev/null 2>&1; then
+        log "Creating namespace '$ns'..."
+        if ! kubectl create namespace "$ns"; then
+            error "Failed to create namespace '$ns'"
+            exit 3
+        fi
+    else
+        log "Namespace '$ns' already exists, skipping creation"
+    fi
+done
 
 if ! kubectl apply -f "$RELEASE_DIR/deploy.yaml"; then
     error "Failed to deploy application to Kubernetes"
@@ -325,7 +372,7 @@ log "Application: $APP"
 log "Helm Chart: $HELM_DIR"
 log "Deployment Manifest: $RELEASE_DIR/deploy.yaml"
 log "Application pods: Ready"
-if kubectl get namespace observe >/dev/null 2>&1; then
+if kubectl get namespace observe-$USER >/dev/null 2>&1; then
     log "Monitoring pods: Ready"
 fi
 echo ""
@@ -339,8 +386,8 @@ echo ""
 log "Current application pod status:"
 kubectl get pods
 
-if kubectl get namespace observe >/dev/null 2>&1; then
+if kubectl get namespace observe-$USER >/dev/null 2>&1; then
     echo ""
     log "Current monitoring pod status:"
-    kubectl get pods -n observe
+    kubectl get pods -n observe-$USER
 fi

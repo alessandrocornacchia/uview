@@ -2,19 +2,19 @@
 #nameOverride: ""
 
 repoName: acornacchia
-namespace: online-boutique-cornaca
+namespace: online-boutique
 
 # Observability components
 observability:
-  namespace: observe-cornaca
+  namespace: observe
   
   prometheus:
-    nodePort: 30099
+    nodePort: 30090
   
   jaeger:
     nodePort:
-      queryhttp: 30688  # For Jaeger UI
-      querygrpc: 30689   # For gRPC queries
+      queryhttp: 30686  # For Jaeger UI
+      querygrpc: 30685   # For gRPC queries
     service:
       otelHttp: 4318  # OTEL endpoint to receive traces from OTEL collector
 
