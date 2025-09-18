@@ -90,7 +90,7 @@ sketch_analysis() {
     )
 
     # get all service names as defined by the Blueprint wiring spec
-    if [[ $EXPERIMENT_ID != *"SockShop"* ]]; then
+    if [[ $EXPERIMENT_ID != *"SockShop"* || $EXPERIMENT_ID != *"online-boutique"*  ]]; then
 
         Pods=(
             $(cat $APP_DIR/$APP/wiring/specs/$BUILD_NAME.go | egrep -o "\"[^\"]*_service\"" | uniq)

@@ -41,8 +41,10 @@ if [ -z "$EXPERIMENT_START_TS" ]; then
 fi
 
 # log the configuration
-echo "Requested start time: $START_TIME_TZ"
-echo "Requested end time: $END_TIME_TZ"
+echo "> Requested start time: $START_TIME_TZ"
+echo "> Requested end time: $END_TIME_TZ"
+echo "> Jaeger endpoint: $JAEGER"
+echo "> Prometheus endpoint: $PROMETHEUS"
 
 # random sampling percentage (sample x% of the collected traces)
 PERCENTAGE_SAMPLE="1 5 20 100"
@@ -60,9 +62,40 @@ TIME_RESOLUTION=1
 cd "$(dirname "$0")"
 
 # get all service names as defined by the wiring spec
-SVC=(
-    $(cat $BASEDIR/wiring/specs/original.go | egrep -o "\"[^\"]*_service\"" | uniq)
-)
+if [ -d "$BASEDIR/wiring/specs" ]; then
+    
+    # app is a blueprint-based app
+    echo "Detected Blueprint app $APP. Using wiring specs in $BASEDIR/wiring/specs"
+    SVC=($(cat $BASEDIR/wiring/specs/original.go | egrep -o "\"[^\"]*_service\"" | uniq))
+
+else
+    # we assume then is k8s
+    echo "Assuming k8s app $APP. "
+    SVC=(
+        'productcatalogservice'
+        'adservice'
+        'cartservice'
+        'checkoutservice'
+        'currencyservice'
+        'emailservice'
+        'paymentservice'
+        'shippingservice'
+        'recommendationservice'
+        'redis-cart'
+        'frontend'
+    )
+fi
+
+echo "> Services found: ${SVC[@]}"
+
+# detect frontent service name, needed for traces (all going through it)
+for s in "${SVC[@]}" ; do
+    if [[ $s == *"frontend"* ]]; then
+        FRONTEND_SVC=$s
+    fi
+done
+
+echo "> Frontend service detected as: $FRONTEND_SVC"
 
 
 # downlaod traces and produce sampled versions

@@ -155,6 +155,8 @@ prometheus:
       querygrpc: 306<X>5   # For gRPC queries
 ```
 
+Finally, use the same port for `JAEGER` and `PROMETHEUS` in the `.env` file under `usecases/experiments/configs/online-boutique-$USER/.env`. 
+
 ### Alternatives
 Alternatively:
 - run the experiment on a different testbed of your choice with Kubernetes installed;
