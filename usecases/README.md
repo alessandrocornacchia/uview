@@ -124,21 +124,43 @@ Note that `dsbhotel-long` is a configuration available under `usecases/experimen
 
 ## 2) Kubernetes setup
 
-### ⚠️ Important
+### Set  namespace first
 
 For the Kubernetes setup, the reviewers should use separate namespaces to avoid interferences. 
-This is yet to be reflected in the `orchestrator.py` script, and currently there is only a single namespace for everyone. Please manually check that no other reviewers are running experiment before starting your own. 
+To do so, we require each reviewer to create a copy of the `online-boutique` configuration and modify some parameters. The `orchestrator.py` script will then use this configuration to deploy the application in the specified namespace.
 
-This is tedious but quite simple. Because at the end of the experiment our orchesrator should delete all resources in the namespace, you can just check if the namespace is empty to verify that no one else is running the experiment:
-
+#### 1) Copy the configuration folder
 ```bash
-kubectl get pods -n online-boutique
+cd ~/uview/usecases/experiments/configs/online-boutique-cornaca ~/uview/usecases/experiments/configs/online-boutique-$USER 
 ```
 
-If you find this overly restrictive, please reach out and we can help you modify the script to use a different namespace automatically. Alternatively, you can run the experiment on a different testbed of your choice with Kubernetes installed.
+#### 2) Edit `injector.yaml` 
+Use namespaces `online-boutique-$USER` and `observe-$USER` instead of `online-boutique-cornaca` and `observe-cornaca` in `injector.yaml`.
+
+#### 3) Edit `values.yaml`
+Do the same in `values.yaml`. 
 
 
-### Environment
+### Set node ports
+Prometheus and Jaeger are bound to node ports as in the cluster.
+We must change the ports of Prometheus and Jaeger to avoid conflicts. Edit only `nodePort` values in `values.yaml`. A suggestion is to use the last digit of your username to replace `X` in the example below. If for any reason these ports give you issues, feel free to pick other ports yourself. 
+
+```
+prometheus:
+    nodePort: 30<X>90   # X is the last digit of your username
+  
+  jaeger:
+    nodePort:
+      queryhttp: 306<X>6  # For Jaeger UI
+      querygrpc: 306<X>5   # For gRPC queries
+```
+
+### Alternatives
+Alternatively:
+- run the experiment on a different testbed of your choice with Kubernetes installed;
+- coordinate with other reviewers not to run experiments at the same time;
+
+### Run experiments
 
 This will use a 3-node Kubernetes cluster. Verify the output of `kubectl get nodes` to see the nodes in the cluster.
 
@@ -169,7 +191,7 @@ Notice that the `--loadgen` flag is not needed here because the orchestrator wil
 ssh mcnode17
 conda activate uview
 cd ~/uview/usecases/experiments
-python orchestrator.py -c online-boutique-long -e online-boutique --chaos
+python orchestrator.py -c online-boutique-$USER -e online-boutique --chaos
 ```
 
 

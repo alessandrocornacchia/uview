@@ -20,7 +20,7 @@ anomalies:
   # every random in [1, period_max_seconds] seconds inject an anomaly
   period_max_seconds: 300
 
-  num_injection_rounds: 4
+  num_injection_rounds: 8
 
   # start_delay: '8m'
     
